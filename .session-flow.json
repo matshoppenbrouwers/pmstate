@@ -1,0 +1,10 @@
+{
+  "root": "_devdocs",
+  "paths": {
+    "research": "_devdocs/research",
+    "plans": "_devdocs/plans",
+    "todo": "_devdocs/todo",
+    "testing": "_devdocs/testing",
+    "architecture": "_devdocs/architecture"
+  }
+}
