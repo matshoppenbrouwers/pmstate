@@ -1,5 +1,9 @@
 # pmstate
 
+[![PyPI](https://img.shields.io/pypi/v/pmstate.svg)](https://pypi.org/project/pmstate/)
+[![CI](https://github.com/matshoppenbrouwers/pmstate/actions/workflows/ci.yml/badge.svg)](https://github.com/matshoppenbrouwers/pmstate/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/pypi/pyversions/pmstate.svg)](https://pypi.org/project/pmstate/)
+
 **The directory tree IS the process state.**
 
 A tiny Python library for agent-driven processes that live on the filesystem.
@@ -80,6 +84,23 @@ The agent gets four tools (`list_tree`, `get_state`, `find_state`,
   `prune(path)` for runtime mutation.
 - **Harness** — adapter that wires the four agent tools into an LLM runtime.
   v0.1 ships `ClaudeHarness`; the surface is harness-agnostic.
+
+## Quickstart
+
+A runnable end-to-end example lives at
+[`examples/procurement/`](examples/procurement/). After installing the
+`claude-sdk` extra and setting `ANTHROPIC_API_KEY`:
+
+```bash
+git clone https://github.com/matshoppenbrouwers/pmstate
+cd pmstate
+uv sync --all-extras
+uv run python -m examples.procurement.seed_data
+uv run python examples/procurement/run.py "what is pending in procurement?"
+```
+
+The agent navigates the procurement subtree, calls the four pmstate tools,
+and answers from the rolled-up view. Costs a few cents per run.
 
 ## Status
 

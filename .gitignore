@@ -84,3 +84,7 @@ scratch/
 
 # Internal design docs (not for public repo)
 _devdocs/
+
+# Generated example state (run seed_data.py to regenerate)
+examples/procurement/state/
+examples/**/.pmstate/
