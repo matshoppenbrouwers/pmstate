@@ -81,3 +81,6 @@ tmp/
 # Local notes / scratch
 .scratch/
 scratch/
+
+# Internal design docs (not for public repo)
+_devdocs/

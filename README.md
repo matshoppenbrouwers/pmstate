@@ -1,29 +1,91 @@
-# per-pmstate — PM State Framework
+# pmstate
 
-Generic, modular framework for deep agents to own and navigate hierarchical process-flow state.
+**The directory tree IS the process state.**
 
-## Concept
+A tiny Python library for agent-driven processes that live on the filesystem.
+Each node in your process tree owns a slice of state on disk — an append-only
+event log or a JSON table. The agent navigates, reads, spawns, and prunes the
+same way a human navigates a project folder.
 
-- An AI deep agent (e.g., Badger) owns, maintains, and manages a process flow.
-- Each flow step (e.g., `active`) and subprocess step (e.g., `procurement`) holds its own state, stored in a flexible format (data, csv, md, json, or other).
-- State updates propagate upward: top-level states are notified/updated when substates change.
-- The deep agent can navigate through all levels, understand what happened where, and provide the user with info and guidance.
-- The framework should feel like an agent SDK (crewai-style): beautiful, elegant, modular — users compose flows with processes and subprocesses, and the agent navigates the result.
-- Built as a **shell** using a common event protocol (CommandLane-style) so different harnesses can drive it: custom, Claude Agent SDK, openclaw, hermes, etc.
+No DSL. No decorators. No compile step. Plain `attrs`-shaped values, plain
+JSON on disk, and a four-tool surface any LLM harness can drive.
 
-## Open design questions
+## Why
 
-- State schema: strictly-typed vs. free-form per node? Versioning/migration strategy?
-- Propagation rules: pull (agent recomputes on read) vs. push (substate emits event to parent) vs. hybrid?
-- Event protocol: reuse CommandLane events directly, or extend? What's the minimal surface?
-- Persistence: file-system layout mirroring the flow tree, or single event log + materialized views?
-- Harness adapter contract: what does a harness need to implement to plug in?
-- Relationship to `cl-app` (CommandLane) — shared event schema? Shared primitives?
+Most agent frameworks treat process state as opaque blobs in a vector store
+or workflow engine. `pmstate` flips it: the tree of folders and files **is**
+the state. That means:
+
+- An agent can `ls`-style introspect what's happening at any depth.
+- Branches spawn and die at runtime — no recompile.
+- Every event is a CloudEvents-shaped JSON line. Replayable, auditable,
+  human-readable.
+- A human can `cat` a log file and see exactly what the agent saw.
+
+## Install
+
+```bash
+pip install pmstate              # core
+pip install pmstate[claude-sdk]  # with the Claude Agent SDK harness
+```
+
+## Example: a procurement flow in 28 lines
+
+```python
+from pmstate import Node, Log, Table, Tree
+from pmstate import ClaudeHarness
+
+def quote_view(events):
+    """Vendor quotes received and pending approval."""
+    pending = [e for e in events if e["type"] == "quote.received"
+               and not any(a["data"]["quote_id"] == e["id"]
+                           for a in events if a["type"] == "quote.approved")]
+    return {"pending_count": len(pending), "latest": pending[-1] if pending else None}
+
+def procurement_rollup(children):
+    return {
+        "open_quotes": children["quotes"]["pending_count"],
+        "open_lpos":   children["lpos"]["count"],
+        "blocked":     children["quotes"]["pending_count"] > 5,
+    }
+
+procurement = Node(
+    "procurement",
+    description="Vendor quotes, LPOs, approvals.",
+    reducer=procurement_rollup,
+    children=[
+        Node("quotes", state=Log("state/quotes.jsonl"), view=quote_view),
+        Node("lpos",   state=Log("state/lpos.jsonl")),
+        Node("vendors", state=Table("state/vendors.json")),
+    ],
+)
+
+tree = Tree("project_alpha", root=Node("active", children=[procurement]))
+ClaudeHarness(tree).run()
+```
+
+That is the full procurement flow. One custom view, one reducer, three leaves.
+The agent gets four tools (`list_tree`, `get_state`, `find_state`,
+`read_log`), discovers the structure on its own, and answers questions like
+*"what's blocking us?"* by reading the rolled-up state.
+
+## Concepts
+
+- **Node** — a named position in the tree. May own `state` (a `Log` or
+  `Table`), a `view` (function: events → dict), a `reducer` (function:
+  children's views → dict), and `children`.
+- **Log** — append-only JSONL of CloudEvents-shaped events.
+- **Table** — JSON document for slowly-changing reference data.
+- **Tree** — the wrapper that gives you `spawn(parent, child)` and
+  `prune(path)` for runtime mutation.
+- **Harness** — adapter that wires the four agent tools into an LLM runtime.
+  v0.1 ships `ClaudeHarness`; the surface is harness-agnostic.
 
 ## Status
 
-Greenfield. Registered in `../INDEX.md`. No code yet.
+v0.1 alpha. Open but not supported. One user (Laterite). API will break
+without warning. PRs not yet accepted. Stars welcome.
 
-## Repo
+## License
 
-- GitHub: https://github.com/matshoppenbrouwers/pm-state-framework
+MIT.
