@@ -11,7 +11,11 @@ from pmstate import (
     NodePathError,
     ReaderError,
     Table,
+    Tree,
     append_event,
+    compute_view,
+    compute_view_at,
+    load_agents_md,
     read_events,
 )
 
@@ -33,6 +37,13 @@ def test_phase_2_re_exports() -> None:
     assert read_events is pmstate.read_events
     assert EventTooLargeError is pmstate.EventTooLargeError
     assert ReaderError is pmstate.ReaderError
+
+
+def test_phase_4_re_exports() -> None:
+    assert Tree is pmstate.Tree
+    assert compute_view is pmstate.compute_view
+    assert compute_view_at is pmstate.compute_view_at
+    assert load_agents_md is pmstate.load_agents_md
 
 
 def test_all_list_matches_module_attrs() -> None:
