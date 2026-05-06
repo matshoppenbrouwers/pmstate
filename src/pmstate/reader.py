@@ -5,11 +5,9 @@ from __future__ import annotations
 import json
 from collections.abc import Callable, Iterator
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any
 
-
-class _UpcasterLike(Protocol):
-    def upcast(self, event_dict: dict[str, Any]) -> dict[str, Any]: ...
+from pmstate.upcasters import UpcasterRegistry, default_registry
 
 
 class ReaderError(ValueError):
@@ -29,14 +27,16 @@ def read_events(
     end: int | None = None,
     limit: int | None = None,
     filter: Callable[[dict[str, Any]], bool] | None = None,
-    registry: _UpcasterLike | None = None,
+    registry: UpcasterRegistry | None = None,
 ) -> Iterator[dict[str, Any]]:
     """Stream decoded events from a JSONL log. ``start``/``end`` are byte offsets.
 
     Lines are streamed one at a time; the file is never fully buffered. Blank lines
     are skipped silently. A malformed line raises :class:`ReaderError` with line
-    context. ``filter`` is applied after decoding (and after upcasting).
+    context. ``filter`` is applied after decoding (and after upcasting). When
+    ``registry`` is ``None``, the module-level ``default_registry`` is used.
     """
+    active_registry = registry if registry is not None else default_registry
     yielded = 0
     line_number = 0
     with log_path.open("rb") as f:
@@ -59,8 +59,7 @@ def read_events(
             except json.JSONDecodeError as exc:
                 text = stripped.decode("utf-8", "replace")
                 raise ReaderError(log_path, line_number, text) from exc
-            if registry is not None:
-                decoded = registry.upcast(decoded)
+            decoded = active_registry.upcast(decoded)
             if filter is not None and not filter(decoded):
                 continue
             yield decoded
