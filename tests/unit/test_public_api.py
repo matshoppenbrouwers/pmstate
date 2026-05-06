@@ -46,6 +46,14 @@ def test_phase_4_re_exports() -> None:
     assert load_agents_md is pmstate.load_agents_md
 
 
+def test_phase_5_re_exports() -> None:
+    assert pmstate.list_tree is not None
+    assert pmstate.get_state is not None
+    assert pmstate.find_state is not None
+    assert pmstate.read_log is not None
+    assert pmstate.ToolError is not None
+
+
 def test_all_list_matches_module_attrs() -> None:
     for name in pmstate.__all__:
         assert hasattr(pmstate, name), f"__all__ lists {name!r} but it's not on the module"

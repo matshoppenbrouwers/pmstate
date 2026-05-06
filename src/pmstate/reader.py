@@ -39,6 +39,8 @@ def read_events(
     active_registry = registry if registry is not None else default_registry
     yielded = 0
     line_number = 0
+    if not log_path.exists():
+        return
     with log_path.open("rb") as f:
         if start is not None:
             f.seek(start)

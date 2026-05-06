@@ -7,6 +7,7 @@ from pmstate.node import Node
 from pmstate.reader import ReaderError, read_events
 from pmstate.rollup import compute_view, compute_view_at
 from pmstate.storage import Log, Table
+from pmstate.tools import ToolError, find_state, get_state, list_tree, read_log
 from pmstate.tree import Tree
 from pmstate.upcasters import UpcastCycleError, Upcaster, UpcasterRegistry, default_registry
 from pmstate.writer import EventTooLargeError, append_event
@@ -21,6 +22,7 @@ __all__ = [
     "NodePathError",
     "ReaderError",
     "Table",
+    "ToolError",
     "Tree",
     "UpcastCycleError",
     "Upcaster",
@@ -30,6 +32,10 @@ __all__ = [
     "compute_view",
     "compute_view_at",
     "default_registry",
+    "find_state",
+    "get_state",
+    "list_tree",
     "load_agents_md",
     "read_events",
+    "read_log",
 ]
