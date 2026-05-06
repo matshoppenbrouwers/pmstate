@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 import pmstate
 from pmstate import (
     Event,
@@ -52,6 +54,16 @@ def test_phase_5_re_exports() -> None:
     assert pmstate.find_state is not None
     assert pmstate.read_log is not None
     assert pmstate.ToolError is not None
+
+
+def test_phase_6_claude_harness_lazy_import() -> None:
+    Harness = pmstate.ClaudeHarness
+    assert Harness.__name__ == "Harness"
+
+
+def test_unknown_attribute_raises() -> None:
+    with pytest.raises(AttributeError, match="has no attribute"):
+        _ = pmstate.Definitely_Not_A_Real_Attribute  # type: ignore[attr-defined]
 
 
 def test_all_list_matches_module_attrs() -> None:

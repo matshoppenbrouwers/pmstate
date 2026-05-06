@@ -1,5 +1,7 @@
 """pmstate: the directory tree IS the process state."""
 
+from typing import TYPE_CHECKING
+
 from pmstate._paths import NodePathError
 from pmstate.agents_md import load_agents_md
 from pmstate.envelope import Event
@@ -12,9 +14,27 @@ from pmstate.tree import Tree
 from pmstate.upcasters import UpcastCycleError, Upcaster, UpcasterRegistry, default_registry
 from pmstate.writer import EventTooLargeError, append_event
 
+if TYPE_CHECKING:
+    from pmstate.adapters.claude_sdk import Harness as ClaudeHarness
+
+
+def __getattr__(name: str) -> object:
+    if name == "ClaudeHarness":
+        try:
+            from pmstate.adapters.claude_sdk import Harness as _Harness  # noqa: PLC0415
+        except ImportError as exc:
+            raise ImportError(
+                "ClaudeHarness requires the claude-sdk extra: "
+                "pip install pmstate[claude-sdk]"
+            ) from exc
+        return _Harness
+    raise AttributeError(f"module 'pmstate' has no attribute {name!r}")
+
+
 __version__ = "0.0.1"
 
 __all__ = [
+    "ClaudeHarness",
     "Event",
     "EventTooLargeError",
     "Log",
