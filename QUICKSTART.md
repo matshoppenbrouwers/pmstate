@@ -18,6 +18,35 @@ You'll learn the four core ideas of `pmstate`:
 If you've used CrewAI or LangGraph: pmstate has **no DSL, no compile step, no
 graph object**. Just plain Python values + JSON on disk + four agent tools.
 
+## Picture it
+
+The mental model is just two things side by side:
+
+```mermaid
+graph TD
+    subgraph TREE["Process tree (in your head)"]
+        P[project]
+        P --> T[todos]
+        P --> N[notes]
+        P --> D[decisions]
+    end
+    subgraph FS["Filesystem (on disk)"]
+        R["my-research/"]
+        R --> S["state/"]
+        S --> TJ["todos.jsonl"]
+        S --> NJ["notes.jsonl"]
+        S --> DJ["decisions.jsonl"]
+    end
+    T -. owns .-> TJ
+    N -. owns .-> NJ
+    D -. owns .-> DJ
+```
+
+The agent navigates the **left side** (calling things like `list_tree("/")`
+and `get_state("/todos")`); your data actually lives on the **right side**.
+The `Node` you wire up in code is just a pointer that says *"this branch of
+the process owns this file."*
+
 ---
 
 ## Prerequisites
@@ -113,6 +142,25 @@ The `description` strings are how the agent knows what each bucket is *for* —
 they show up in the agent's `list_tree` output. Treat them like one-line
 folder labels.
 
+Here's exactly what `build_tree()` returns, drawn out:
+
+```mermaid
+graph TD
+    P["project<br/>internal node"]
+    P --> T["todos<br/>Log · state/todos.jsonl"]
+    P --> N["notes<br/>Log · state/notes.jsonl"]
+    P --> D["decisions<br/>Log · state/decisions.jsonl"]
+    classDef internal fill:#eef,stroke:#669,stroke-width:1px;
+    classDef leaf fill:#efe,stroke:#696,stroke-width:1px;
+    class P internal;
+    class T,N,D leaf;
+```
+
+Internal nodes (blue) have children but no state of their own — their view
+is computed from below. Leaf nodes (green) own a state file. There's no
+limit on depth; you could nest `Node("active", children=[Node("project", ...)])`
+to model multi-project setups.
+
 ---
 
 ## Step 3 — Write some events
@@ -168,6 +216,22 @@ state/
 
 Each line in those files is one event. Open them with any text editor —
 **they're meant to be human-readable.** That's a feature.
+
+Here's the full event lifecycle, end to end:
+
+```mermaid
+flowchart LR
+    CLI["python add.py todos ..."] --> EV["Event.new<br/>type, source, data"]
+    EV --> AE[append_event]
+    AE --> JL[("state/todos.jsonl<br/>append-only")]
+    JL -.read by.-> RD[read_events]
+    JL -.read by.-> CV[compute_view_at]
+    JL -.read by.-> AG[agent tools]
+```
+
+Notice the asymmetry: writes go through one path (`append_event`); reads can
+come from many places (a CLI, your code, the rollup engine, the LLM agent).
+That's the whole architecture in one picture.
 
 ---
 
@@ -268,6 +332,29 @@ That's the loop. Append events with `add.py`, ask the agent anything with
 `chat.py`. The agent never sees your whole tree at once — it reads what it
 needs through four small tools.
 
+Here's the conversation that just happened, in detail:
+
+```mermaid
+sequenceDiagram
+    participant You
+    participant Agent as Claude
+    participant Tools as pmstate tools
+    participant FS as state/*.jsonl
+
+    You->>Agent: "what is pending in /todos?"
+    Agent->>Tools: list_tree("/")
+    Tools-->>Agent: [todos, notes, decisions] + descriptions
+    Agent->>Tools: read_log("/todos")
+    Tools->>FS: stream events
+    FS-->>Tools: 2 todo events
+    Tools-->>Agent: [{message: "read 3 papers"}, ...]
+    Agent-->>You: "2 pending: read 3 papers, outline blog post"
+```
+
+The agent decides which tools to call. It never gets the whole tree at once,
+which is why this scales: a tree with thousands of nodes still presents a
+4-tool surface to the model.
+
 ---
 
 ## Step 6 — Add a custom view
@@ -356,6 +443,88 @@ root=Node(
 The agent's top-level `get_state("/")` is now a one-line health view, while
 `get_state("/todos")` still returns the detailed list. The agent picks the
 right depth for the question being asked.
+
+Visually, here's how data flows *up* from raw events to the rolled-up
+project view:
+
+```mermaid
+flowchart BT
+    TE[("todos.jsonl<br/>2 events")]
+    NE[("notes.jsonl<br/>1 event")]
+    DE[("decisions.jsonl<br/>1 event")]
+    TE --> TV["todos_view<br/>open: list, count: 2"]
+    NE --> NV["default view<br/>count: 1, latest: ..."]
+    DE --> DV["default view<br/>count: 1, latest: ..."]
+    TV --> RR["project_rollup<br/>todos_open: 2<br/>notes_count: 1<br/>decisions_count: 1<br/>stuck: false"]
+    NV --> RR
+    DV --> RR
+    classDef leaf fill:#efe,stroke:#696;
+    classDef view fill:#fef,stroke:#969;
+    classDef root fill:#eef,stroke:#669;
+    class TE,NE,DE leaf;
+    class TV,NV,DV view;
+    class RR root;
+```
+
+Each layer is just a function. **There's no framework runtime computing
+this in the background** — it runs lazily when something asks for the view,
+and a content-hash cache means unchanged branches don't re-compute.
+
+---
+
+## How a tree evolves over time
+
+The diagrams above show one instant. In practice, a `pmstate` tree changes
+in two independent ways: **events accumulate** in leaves, and **branches
+spawn or prune** at runtime.
+
+**Snapshot 1 — fresh tree, no data yet:**
+
+```mermaid
+graph TD
+    P[project] --> T["todos<br/>0 events"]
+    P --> N["notes<br/>0 events"]
+    P --> D["decisions<br/>0 events"]
+```
+
+**Snapshot 2 — after the events from Step 3:**
+
+```mermaid
+graph TD
+    P["project<br/>todos_open: 2"] --> T["todos<br/>2 events"]
+    P --> N["notes<br/>1 event"]
+    P --> D["decisions<br/>1 event"]
+```
+
+The shape didn't change; only the events under each leaf grew. The rolled-up
+view at the root reflects this without you wiring anything.
+
+**Snapshot 3 — after a runtime spawn (a new sub-bucket appears):**
+
+```mermaid
+graph TD
+    P["project<br/>todos_open: 2"] --> T["todos<br/>2 events"]
+    P --> N["notes<br/>1 event"]
+    P --> D["decisions<br/>1 event"]
+    P --> R["reading-list<br/>0 events<br/>NEW"]
+    classDef new fill:#ffe,stroke:#960,stroke-width:2px;
+    class R new;
+```
+
+You'd add a new branch with one line of code:
+
+```python
+tree = build_tree().spawn("/", Node("reading-list", state=Log(STATE / "reading.jsonl")))
+```
+
+`spawn` returns a *new* `Tree` (the old one is still valid — `Tree` is
+immutable). The next time the agent calls `list_tree("/")` it sees four
+buckets instead of three. No restart, no migration, no schema change. To
+remove a branch later, `tree.prune("/reading-list")`.
+
+This is what makes pmstate a fit for processes that **grow organically** —
+client engagements, research projects, support cases — where the shape isn't
+known upfront.
 
 ---
 
