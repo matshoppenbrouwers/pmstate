@@ -1,0 +1,21 @@
+name: hiring-pipeline-q3
+pmstate_version: "0.2.0"
+tree:
+  root: active
+  nodes:
+    - path: /active/pipeline
+      reducer: pipeline_rollup
+      children:
+        - {name: leads,      state: log, view: bucket_view}
+        - {name: screened,   state: log, view: bucket_view}
+        - {name: interviews, state: log, view: bucket_view}
+        - {name: offers,     state: log, view: bucket_view}
+        - {name: hires,      state: log, view: bucket_view}
+        - {name: rejected,   state: table}
+events:
+  candidate.added:
+    schema: {name: str, source: str}
+  candidate.advanced:
+    schema: {from: str, to: str, note: str}
+  candidate.rejected:
+    schema: {reason: str}

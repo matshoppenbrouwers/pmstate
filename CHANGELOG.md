@@ -6,6 +6,46 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) loosely
 during the 0.x phase: **breaking changes may ship in any release without
 warning until 1.0**.
 
+## 0.2.0 - 2026-05-07
+
+First CLI release. The 4-verb `pmstate` command now subsumes the v0.1
+hand-written boilerplate. See
+[`_devdocs/plans/2026-05-07-pmstate-cli-implementation.md`](./_devdocs/plans/2026-05-07-pmstate-cli-implementation.md)
+for the design.
+
+### Added
+- `pmstate init` — scaffold a project from a `pmstate.yaml` spec. Three
+  modes: default (writes `pmstate.example.yaml`), `--from-spec PATH`
+  (renders `tree.py`, `views.py`, `reducers.py`, `chat.py`, `AGENTS.md`,
+  `state/.gitignore`), and `--upgrade` (refresh-in-place, idempotent).
+- `pmstate validate [--strict] [--json]` — five baseline checks (spec
+  parses, tree imports, `build_tree()` returns `Tree`,
+  `compute_view_at("/")` doesn't raise, `AGENTS.md` present). `--strict`
+  shells out to `mypy`/`ruff` if available; `--json` emits structured
+  issues.
+- `pmstate seed [--n N] [--seed K] [--force]` — deterministic event
+  generation across all Log leaves, driven by `events:` in the spec.
+- `pmstate run [PROMPT] [--watch | --no-watch]` — thin wrapper over the
+  Claude Agent SDK harness. Default is `--no-watch`.
+- `pmstate.yaml` schema (v1) anchored on `name`, `pmstate_version`,
+  `tree.{root,nodes}`, and `events.<type>.schema`. Authored either by
+  hand or by an orchestrating agent following
+  [`docs/spec-authoring.md`](./docs/spec-authoring.md).
+- `docs/cli.md` — CLI reference (verbs, flags, exit codes).
+- `docs/spec-authoring.md` — the load-bearing agent guide for
+  translating natural language into a valid `pmstate.yaml` (three worked
+  examples + the 5-rule recipe + common pitfalls).
+- `examples/procurement/pmstate.yaml` — demonstrative spec that *would*
+  generate the existing procurement example.
+- New top-level dependency: `pyyaml>=6.0`.
+
+### Changed
+- `README.md` and `QUICKSTART.md` rewritten around the CLI flow. The
+  v0.1 manual flow is preserved as a `QUICKSTART.md` appendix.
+- Scaffolded `AGENTS.md` now ships with `## Operating this tree` and
+  `## Modifying the tree` sections so any harness reads them
+  automatically.
+
 ## 0.1.1 - 2026-05-07
 
 Documentation-only release. No code changes.

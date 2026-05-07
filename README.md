@@ -33,45 +33,34 @@ pip install pmstate              # core
 pip install pmstate[claude-sdk]  # with the Claude Agent SDK harness
 ```
 
-## Example: a procurement flow in 28 lines
+## Example: build a hiring tracker in three commands
 
-```python
-from pmstate import Node, Log, Table, Tree
-from pmstate import ClaudeHarness
+```bash
+# 1. Edit pmstate.yaml to describe your tree (see docs/spec-authoring.md)
+pmstate init                                       # writes pmstate.example.yaml
+$EDITOR pmstate.example.yaml && mv pmstate.example.yaml pmstate.yaml
 
-def quote_view(events):
-    """Vendor quotes received and pending approval."""
-    pending = [e for e in events if e["type"] == "quote.received"
-               and not any(a["data"]["quote_id"] == e["id"]
-                           for a in events if a["type"] == "quote.approved")]
-    return {"pending_count": len(pending), "latest": pending[-1] if pending else None}
+# 2. Generate the project (tree.py, views.py, reducers.py, AGENTS.md, …)
+pmstate init --from-spec pmstate.yaml my-process
+cd my-process
 
-def procurement_rollup(children):
-    return {
-        "open_quotes": children["quotes"]["pending_count"],
-        "open_lpos":   children["lpos"]["count"],
-        "blocked":     children["quotes"]["pending_count"] > 5,
-    }
-
-procurement = Node(
-    "procurement",
-    description="Vendor quotes, LPOs, approvals.",
-    reducer=procurement_rollup,
-    children=[
-        Node("quotes", state=Log("state/quotes.jsonl"), view=quote_view),
-        Node("lpos",   state=Log("state/lpos.jsonl")),
-        Node("vendors", state=Table("state/vendors.json")),
-    ],
-)
-
-tree = Tree("project_alpha", root=Node("active", children=[procurement]))
-ClaudeHarness(tree).run()
+# 3. Seed deterministic events and ask a question
+pmstate seed --n 30
+pmstate run "what's pending?"
 ```
 
-That is the full procurement flow. One custom view, one reducer, three leaves.
-The agent gets four tools (`list_tree`, `get_state`, `find_state`,
-`read_log`), discovers the structure on its own, and answers questions like
-*"what's blocking us?"* by reading the rolled-up state.
+That's the full loop. The agent gets four tools (`list_tree`, `get_state`,
+`find_state`, `read_log`), reads the rolled-up state, and answers questions
+like *"what's blocking us?"*. One custom view, one reducer, the directory
+tree on disk **is** the state.
+
+### Driving from Claude Code
+
+`pmstate.yaml` is the source of truth. To translate a natural-language
+request into a working tree, point Claude Code (or any orchestrating agent)
+at [`docs/spec-authoring.md`](docs/spec-authoring.md). It documents the
+schema and includes three worked examples (linear pipeline, kanban, log +
+rollup hierarchy) plus a 5-rule recipe.
 
 ## Concepts
 
@@ -89,10 +78,15 @@ The agent gets four tools (`list_tree`, `get_state`, `find_state`,
 
 **New to pmstate?** Walk through [`QUICKSTART.md`](QUICKSTART.md) — a
 10-minute guide that builds a working agent-navigable process tree from
-scratch (no procurement domain knowledge required). Layman-friendly: every
-concept is explained inline, every step has runnable code.
+scratch using the CLI. Every concept is explained inline; every step has
+runnable code. The original "write the seven files yourself" path is
+preserved as an appendix.
 
-Already comfortable? A larger end-to-end example lives at
+The full CLI reference lives at [`docs/cli.md`](docs/cli.md); the
+agent-facing spec authoring guide is at
+[`docs/spec-authoring.md`](docs/spec-authoring.md).
+
+A larger end-to-end example lives at
 [`examples/procurement/`](examples/procurement/). After installing the
 `claude-sdk` extra and setting `ANTHROPIC_API_KEY`:
 
@@ -103,9 +97,6 @@ uv sync --all-extras
 uv run python -m examples.procurement.seed_data
 uv run python examples/procurement/run.py "what is pending in procurement?"
 ```
-
-The agent navigates the procurement subtree, calls the four pmstate tools,
-and answers from the rolled-up view. Costs a few cents per run.
 
 ## Status
 

@@ -933,11 +933,12 @@ wheels = [
 
 [[package]]
 name = "pmstate"
-version = "0.1.1"
+version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "attrs" },
     { name = "python-ulid" },
+    { name = "pyyaml" },
     { name = "watchfiles" },
 ]
 
@@ -967,6 +968,7 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5" },
     { name = "python-ulid", specifier = ">=2.7" },
+    { name = "pyyaml", specifier = ">=6.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6" },
     { name = "twine", marker = "extra == 'dev'", specifier = ">=5" },
     { name = "watchfiles", specifier = ">=0.24" },

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pmstate"
-version = "0.1.1"
+version = "0.2.0"
 description = "The directory tree IS the process state. A tiny library for filesystem-shaped agent processes."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -24,6 +24,7 @@ classifiers = [
 dependencies = [
     "attrs>=23.2",
     "python-ulid>=2.7",
+    "pyyaml>=6.0",
     "watchfiles>=0.24",
 ]
 
@@ -39,6 +40,9 @@ dev = [
     "twine>=5",
     "pre-commit>=3.7",
 ]
+
+[project.scripts]
+pmstate = "pmstate.cli:main"
 
 [project.urls]
 Repository = "https://github.com/matshoppenbrouwers/pmstate"

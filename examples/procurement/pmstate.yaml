@@ -1,0 +1,25 @@
+# Spec that *would* regenerate the procurement example tree.
+# Demonstrative only — the existing procurement code under examples/ is
+# hand-authored and not regenerated from this file.
+name: project_alpha
+pmstate_version: "0.2.0"
+
+tree:
+  root: active
+  nodes:
+    - path: /active/procurement
+      reducer: procurement_rollup
+      children:
+        - {name: quotes,  state: log,   view: quote_view}
+        - {name: lpos,    state: log,   view: lpo_view}
+        - {name: vendors, state: table}
+
+events:
+  quote.received:
+    schema: {quote_id: str, vendor: str, amount: float}
+  quote.approved:
+    schema: {quote_id: str}
+  quote.withdrawn:
+    schema: {quote_id: str}
+  lpo.issued:
+    schema: {quote_id: str, lpo_number: str}

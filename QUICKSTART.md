@@ -62,7 +62,95 @@ That's it. No accounts, no other services.
 
 ---
 
-## Step 1 — Set up a fresh project
+## The CLI flow (recommended)
+
+`pmstate` ships a four-verb CLI: `init`, `validate`, `seed`, `run`. It
+turns a single declarative `pmstate.yaml` into a working project — no
+hand-written boilerplate.
+
+### Step 1 — Install and set your API key
+
+**macOS / Linux**
+
+```bash
+mkdir my-research && cd my-research
+python3 -m venv .venv && source .venv/bin/activate
+pip install "pmstate[claude-sdk]"
+export ANTHROPIC_API_KEY="sk-ant-..."
+```
+
+**Windows (PowerShell)**
+
+```powershell
+mkdir my-research; cd my-research
+python -m venv .venv; .venv\Scripts\Activate.ps1
+pip install "pmstate[claude-sdk]"
+$env:ANTHROPIC_API_KEY = "sk-ant-..."
+```
+
+### Step 2 — Author your `pmstate.yaml`
+
+Run `pmstate init` once with no arguments. It writes a heavily commented
+`pmstate.example.yaml`:
+
+```bash
+pmstate init
+$EDITOR pmstate.example.yaml      # turn it into your spec
+mv pmstate.example.yaml pmstate.yaml
+```
+
+For our research tracker the spec is:
+
+```yaml
+name: my-research
+pmstate_version: "0.2.0"
+tree:
+  root: project
+  nodes:
+    - path: /project/work
+      children:
+        - {name: todos,     state: log, view: bucket_view}
+        - {name: notes,     state: log, view: bucket_view}
+        - {name: decisions, state: log, view: bucket_view}
+events:
+  todo.added:
+    schema: {title: str, owner: str}
+  note.added:
+    schema: {topic: str, body: str}
+  decision.recorded:
+    schema: {about: str, choice: str}
+```
+
+If you're driving this from Claude Code (or another LLM), point it at
+[`docs/spec-authoring.md`](docs/spec-authoring.md) — the full agent-facing
+guide for translating natural-language requests into this YAML.
+
+### Step 3 — Generate the project, validate, seed, run
+
+```bash
+pmstate init --from-spec pmstate.yaml .   # writes tree.py, views.py, …
+pmstate validate                          # confirms everything builds
+pmstate seed --n 30                       # 30 deterministic events
+pmstate run "what's pending?"             # asks the tree
+```
+
+That's it. Six commands from a fresh terminal to an LLM-navigable process.
+The CLI generated `tree.py`, `views.py`, `reducers.py`, `chat.py`, and
+`AGENTS.md` for you. Edit them freely — they're plain Python.
+
+For deeper customisation, keep reading: the appendix below walks through
+authoring the same files **by hand**, which is also how you learn what each
+piece is doing.
+
+---
+
+## Without the CLI (the v0.1 manual flow)
+
+The rest of this guide builds the same tracker without the CLI. It's the
+v0.1-style flow — useful for understanding what `pmstate init` is doing for
+you, and for projects that need shapes the spec can't yet express.
+
+### Step 1 — Set up a fresh project
 
 Open a terminal and create a project folder. We'll keep everything inside it:
 
@@ -86,7 +174,7 @@ pip install "pmstate[claude-sdk]"
 
 The `[claude-sdk]` part installs the optional Claude Agent SDK so the agent
 runtime works. After this, `pip list | grep pmstate` (or `pip list | findstr
-pmstate` on Windows) should show `pmstate 0.1.0` and `claude-agent-sdk`.
+pmstate` on Windows) should show `pmstate 0.2.0` and `claude-agent-sdk`.
 
 Set your API key for this terminal session:
 
@@ -104,7 +192,7 @@ $env:ANTHROPIC_API_KEY = "sk-ant-..."
 
 ---
 
-## Step 2 — Define the shape of your process
+### Step 2 — Define the shape of your process
 
 Create a file called `tree.py`. This file describes **what your process looks
 like** — three buckets under one root, all under a tree named `research`.
@@ -163,7 +251,7 @@ to model multi-project setups.
 
 ---
 
-## Step 3 — Write some events
+### Step 3 — Write some events
 
 Create `add.py`. This is a tiny CLI for appending events to your buckets:
 
@@ -235,7 +323,7 @@ That's the whole architecture in one picture.
 
 ---
 
-## Step 4 — Read the state back yourself
+### Step 4 — Read the state back yourself
 
 Before involving the agent, check that you can read the state. Create
 `status.py`:
@@ -276,7 +364,7 @@ for a Log. We'll customise it in Step 6.
 
 ---
 
-## Step 5 — Talk to the agent
+### Step 5 — Talk to the agent
 
 Now wire it up to Claude. Create `chat.py`:
 
@@ -357,7 +445,7 @@ which is why this scales: a tree with thousands of nodes still presents a
 
 ---
 
-## Step 6 — Add a custom view
+### Step 6 — Add a custom view
 
 Default views (`{count, first, latest}`) are fine, but you usually want
 something tailored. Suppose you want `/todos` to report not just `count` but a
@@ -400,7 +488,7 @@ python chat.py "list my todos as a checklist"
 
 ---
 
-## Step 7 — Add a rollup reducer
+### Step 7 — Add a rollup reducer
 
 A *reducer* combines child views into a parent view. Useful for one-line
 health summaries. Add a `reducers.py`:
@@ -472,7 +560,7 @@ and a content-hash cache means unchanged branches don't re-compute.
 
 ---
 
-## How a tree evolves over time
+### How a tree evolves over time
 
 The diagrams above show one instant. In practice, a `pmstate` tree changes
 in two independent ways: **events accumulate** in leaves, and **branches
@@ -528,7 +616,7 @@ known upfront.
 
 ---
 
-## You're done
+### You're done (manual flow)
 
 In ~80 lines of your own code you've built a working, agent-navigable
 process. Recap of what each piece does:

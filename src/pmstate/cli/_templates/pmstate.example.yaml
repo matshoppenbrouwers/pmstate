@@ -1,0 +1,37 @@
+# pmstate.yaml — declarative spec for this project's tree.
+# Re-running `pmstate init --upgrade` regenerates `tree.py` from this file.
+
+# Project name. Surfaces in agent context and CLI output.
+name: hiring-pipeline
+
+# Pin to the pmstate version you authored against. `init --upgrade` consults
+# this so it can apply migrations across versions.
+pmstate_version: "0.2.0"
+
+# The tree of Nodes. Each Node is a position; leaves carry state (Log/Table).
+tree:
+  # Name of the root Node. Doesn't have to match the project name.
+  root: active
+
+  # One or more sub-trees, each rooted at a path under the root.
+  nodes:
+    - path: /active/pipeline       # path under the root, including root segment
+      reducer: pipeline_rollup     # function in reducers.py (stub auto-generated)
+      children:
+        # Log leaves: append-only JSONL streams.
+        - {name: leads,      state: log,   view: bucket_view}
+        - {name: screened,   state: log,   view: bucket_view}
+        - {name: interviews, state: log,   view: bucket_view}
+        - {name: offers,     state: log,   view: bucket_view}
+        - {name: hires,      state: log,   view: bucket_view}
+        # Table leaf: a single JSON document of current state.
+        - {name: rejected,   state: table}
+
+# Event types the tree emits. `pmstate seed` reads `schema` to make plausible
+# payloads; agents use the names to know what to log.
+events:
+  candidate.added:
+    # field-name: type-as-string ('str', 'int', 'float', 'bool').
+    schema: {name: str, source: str}
+  candidate.advanced:
+    schema: {from: str, to: str, note: str}
