@@ -87,7 +87,12 @@ The agent gets four tools (`list_tree`, `get_state`, `find_state`,
 
 ## Quickstart
 
-A runnable end-to-end example lives at
+**New to pmstate?** Walk through [`QUICKSTART.md`](QUICKSTART.md) — a
+10-minute guide that builds a working agent-navigable process tree from
+scratch (no procurement domain knowledge required). Layman-friendly: every
+concept is explained inline, every step has runnable code.
+
+Already comfortable? A larger end-to-end example lives at
 [`examples/procurement/`](examples/procurement/). After installing the
 `claude-sdk` extra and setting `ANTHROPIC_API_KEY`:
 
