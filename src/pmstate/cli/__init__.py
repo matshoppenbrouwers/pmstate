@@ -3,20 +3,11 @@
 from __future__ import annotations
 
 import argparse
-import sys
 from collections.abc import Callable
 
 from pmstate import __version__
 
 Handler = Callable[[argparse.Namespace], int]
-
-
-def _stub(verb: str) -> Handler:
-    def handler(_args: argparse.Namespace) -> int:
-        print(f"{verb}: not yet implemented", file=sys.stderr)
-        return 2
-
-    return handler
 
 
 def _build_parser() -> tuple[argparse.ArgumentParser, dict[str, Handler]]:
