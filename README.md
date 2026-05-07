@@ -72,7 +72,7 @@ rollup hierarchy) plus a 5-rule recipe.
 - **Tree** — the wrapper that gives you `spawn(parent, child)` and
   `prune(path)` for runtime mutation.
 - **Harness** — adapter that wires the four agent tools into an LLM runtime.
-  v0.1 ships `ClaudeHarness`; the surface is harness-agnostic.
+  Ships `ClaudeHarness` today; the surface is harness-agnostic.
 
 ## Quickstart
 
@@ -100,7 +100,7 @@ uv run python examples/procurement/run.py "what is pending in procurement?"
 
 ## Status
 
-v0.1 alpha. Open but not supported. One user (Laterite). API will break
+v0.2 alpha. Open but not supported. One user (Laterite). API will break
 without warning. PRs not yet accepted. Stars welcome.
 
 ## License
