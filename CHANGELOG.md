@@ -6,6 +6,20 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) loosely
 during the 0.x phase: **breaking changes may ship in any release without
 warning until 1.0**.
 
+## 0.1.1 - 2026-05-07
+
+Documentation-only release. No code changes.
+
+### Added
+- `QUICKSTART.md` — a 10-minute layman-friendly tutorial that builds a
+  research-project tracker (todos, notes, decisions) from scratch, with
+  six embedded mermaid diagrams: the directory-IS-state mental model,
+  the resulting tree shape, the event lifecycle, the agent's tool-call
+  sequence, the rollup data flow, and three "how a tree evolves"
+  snapshots showing event accumulation and runtime spawn.
+- README now points the layman path at `QUICKSTART.md` first; the
+  procurement example remains the richer reference.
+
 ## 0.1.0 - 2026-05-06
 
 First real release. Single-user alpha (Laterite procurement). API will

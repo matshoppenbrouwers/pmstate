@@ -100,7 +100,7 @@ class Harness:
 
     async def _run_async(self, prompt: str | None) -> str | None:
         tools = _make_tool_functions(self.tree, self.root_dir)
-        server = create_sdk_mcp_server(name="pmstate", version="0.1.0", tools=tools)
+        server = create_sdk_mcp_server(name="pmstate", version="0.1.1", tools=tools)
         system_prompt = _build_system_prompt(self.tree, self.root_dir, self.system)
         options = ClaudeAgentOptions(
             mcp_servers={"pmstate": server},
