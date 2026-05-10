@@ -6,6 +6,23 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) loosely
 during the 0.x phase: **breaking changes may ship in any release without
 warning until 1.0**.
 
+## [0.3.1] — 2026-05-10
+
+Post-implementation polish on the v0.3.0 write surface. No behaviour
+changes — the validator and the CLI/harness surfaces are byte-identical
+to v0.3.0.
+
+### Internal
+- `cli/_append.py` now imports `_EVENT_BYTE_CEILING` from `pmstate.writer`
+  instead of redefining it locally — single source of truth.
+- Tightened `_resolve_node`'s return type from `tuple[Any, list[Issue]]`
+  to `tuple[Node | None, list[Issue]]`. Surfaced (and fixed) a latent
+  `node.state.path` mypy gap that the looser typing had hidden.
+- Lowercased the state-label in the non-Log error message so it matches
+  how users write it in `pmstate.yaml` (`state=table`, not `state=Table`).
+- Collapsed `cmd_run`'s if/else around `Harness` construction; the
+  defaults already handle the no-write path.
+
 ## [0.3.0] — 2026-05-10
 
 The agent write surface. After v0.3 a freshly-init'd project supports

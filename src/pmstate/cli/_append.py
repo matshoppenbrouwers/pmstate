@@ -12,11 +12,13 @@ import attrs
 from pmstate.cli._spec import Spec, coerce_field
 from pmstate.cli.validate import Issue
 from pmstate.envelope import Event
-from pmstate.storage import Log
+from pmstate.node import Node
+from pmstate.storage import Log, Table
 from pmstate.tree import Tree
+from pmstate.writer import _EVENT_BYTE_CEILING  # single-source the ceiling
 
-_EVENT_BYTE_CEILING = 4000
 _TYPE_PREFIX = "pmstate."
+_STATE_LABELS: dict[type, str] = {Log: "log", Table: "table"}
 
 
 def normalise_type(type_: str) -> str:
@@ -46,7 +48,7 @@ def _issue(msg: str) -> Issue:
     return Issue(file="<append>", line=None, level="error", msg=msg)
 
 
-def _resolve_node(tree: Tree, path: str) -> tuple[Any, list[Issue]]:
+def _resolve_node(tree: Tree, path: str) -> tuple[Node | None, list[Issue]]:
     try:
         node = tree.get(path)
     except (KeyError, ValueError) as exc:
@@ -54,12 +56,12 @@ def _resolve_node(tree: Tree, path: str) -> tuple[Any, list[Issue]]:
     return node, []
 
 
-def _check_log_leaf(node: Any, path: str) -> list[Issue]:
+def _check_log_leaf(node: Node, path: str) -> list[Issue]:
     if not isinstance(node.state, Log):
-        state_repr = type(node.state).__name__ if node.state is not None else "none"
+        state_label = _STATE_LABELS.get(type(node.state), "none")
         return [
             _issue(
-                f"node {path} has state={state_repr}; append targets state=log leaves"
+                f"node {path} has state={state_label}; append targets state=log leaves"
             )
         ]
     return []
@@ -143,7 +145,7 @@ def prepare_append(
     Pure function: no IO. Errors-as-data via the ``issues`` field.
     """
     node, issues = _resolve_node(tree, path)
-    if issues:
+    if issues or node is None:
         return AppendPlan(log_path=None, event=None, issues=tuple(issues))
 
     leaf_issues = _check_log_leaf(node, path)
@@ -172,4 +174,5 @@ def prepare_append(
     if size_issues:
         return AppendPlan(log_path=None, event=None, issues=tuple(size_issues))
 
+    assert isinstance(node.state, Log)  # narrowed by _check_log_leaf above
     return AppendPlan(log_path=node.state.path.resolve(), event=event, issues=())

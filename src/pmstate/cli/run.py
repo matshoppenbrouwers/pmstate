@@ -39,7 +39,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         print(f"{type(exc).__name__}: {exc}", file=sys.stderr)
         return 1
 
-    write_enabled = bool(getattr(args, "write", False))
+    write_enabled = bool(args.write)
     spec = None
     if write_enabled:
         from pmstate.cli._spec import SpecError, parse_spec  # noqa: PLC0415
@@ -51,13 +51,10 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     from pmstate.adapters.claude_sdk import Harness  # noqa: PLC0415 — lazy: optional dep
 
-    if write_enabled:
-        harness = Harness(
-            tree=tree, root_dir=root, watch=bool(args.watch),
-            spec=spec, write_enabled=True,
-        )
-    else:
-        harness = Harness(tree=tree, root_dir=root, watch=bool(args.watch))
+    harness = Harness(
+        tree=tree, root_dir=root, watch=bool(args.watch),
+        spec=spec, write_enabled=write_enabled,
+    )
     reply = harness.run(prompt)
     if reply:
         print(reply)
