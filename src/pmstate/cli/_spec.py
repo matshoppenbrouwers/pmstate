@@ -10,6 +10,7 @@ import yaml
 
 NodeState = Literal["log", "table", "none"]
 _VALID_STATES: frozenset[str] = frozenset({"log", "table", "none"})
+_VALID_FIELD_TYPES: frozenset[str] = frozenset({"str", "int", "float", "bool"})
 
 
 class SpecError(ValueError):
@@ -167,8 +168,44 @@ def _build_event_schema(
                 path, _key_line(anchor, evt),
                 f"events.{evt}.schema must map str -> str, got {fname!r}: {ftype!r}",
             )
+        if ftype not in _VALID_FIELD_TYPES:
+            raise SpecError(
+                path, _key_line(anchor, evt),
+                f"events.{evt}.schema field {fname!r} has unsupported type {ftype!r}; "
+                "valid types: str, int, float, bool",
+            )
         fields[fname] = ftype
     return EventSchema(fields=fields)
+
+
+def coerce_field(value: Any, type_str: str) -> Any:
+    """Coerce/validate ``value`` against a spec field type. Pure; no IO.
+
+    Accepts: str, int (rejects bool), float (accepts int), bool (strict).
+    Raises ``ValueError`` for unrecognised ``type_str`` and ``TypeError`` for
+    type mismatch.
+    """
+    if type_str == "str":
+        if not isinstance(value, str):
+            raise TypeError(f"expected {type_str}, got {type(value).__name__}")
+        return value
+    if type_str == "int":
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise TypeError(f"expected {type_str}, got {type(value).__name__}")
+        return value
+    if type_str == "float":
+        if isinstance(value, bool):
+            raise TypeError(f"expected {type_str}, got {type(value).__name__}")
+        if isinstance(value, int):
+            return float(value)
+        if not isinstance(value, float):
+            raise TypeError(f"expected {type_str}, got {type(value).__name__}")
+        return value
+    if type_str == "bool":
+        if not isinstance(value, bool):
+            raise TypeError(f"expected {type_str}, got {type(value).__name__}")
+        return value
+    raise ValueError(f"unsupported field type: {type_str!r}")
 
 
 def _require_str(path: Path, mapping: dict[str, Any], key: str, anchor: yaml.Node | None) -> str:

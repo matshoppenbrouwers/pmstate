@@ -1,4 +1,4 @@
-"""Claude Agent SDK harness: wires the four pmstate tools into ClaudeSDKClient."""
+"""Claude Agent SDK harness: wires the pmstate tools into ClaudeSDKClient."""
 
 from __future__ import annotations
 
@@ -18,10 +18,14 @@ from claude_agent_sdk import (
     tool,
 )
 
+from pmstate import __version__
 from pmstate._watcher import watch
 from pmstate.agents_md import load_agents_md
+from pmstate.cli._append import prepare_append
+from pmstate.cli._spec import Spec
 from pmstate.tools import find_state, get_state, list_tree, read_log
 from pmstate.tree import Tree
+from pmstate.writer import append_event as _append_event
 
 _TOOL_DESCRIPTIONS = """
 You have four tools for navigating a process-state tree:
@@ -35,18 +39,90 @@ The tree is on disk; the directory structure IS the process. Treat each node
 view as the truth at that level. Always start with list_tree("/") to orient.
 """.strip()
 
+_BASE_TOOLS = (
+    "mcp__pmstate__list_tree",
+    "mcp__pmstate__get_state",
+    "mcp__pmstate__find_state",
+    "mcp__pmstate__read_log",
+)
+_WRITE_TOOL = "mcp__pmstate__append_event"
 
-def _build_system_prompt(tree: Tree, root_dir: Path, override: str | None) -> str:
+
+def _format_event_catalog(spec: Spec) -> str:
+    if not spec.events:
+        return "No event types declared in the spec."
+    lines = ["Write tool catalog (from pmstate.yaml events):"]
+    for evt_name, schema in sorted(spec.events.items()):
+        fields = ", ".join(f"{k}: {v}" for k, v in schema.fields.items()) or "(no fields)"
+        lines.append(f"- {evt_name} → {{{fields}}}")
+    return "\n".join(lines)
+
+
+def _build_system_prompt(
+    tree: Tree,
+    root_dir: Path,
+    override: str | None,
+    *,
+    spec: Spec | None = None,
+    write_enabled: bool = False,
+) -> str:
     parts = [_TOOL_DESCRIPTIONS, f'\nProcess tree name: "{tree.name}"']
     agents_md = load_agents_md(root_dir)
     if agents_md:
         parts.append(f"\nProject context (from AGENTS.md):\n\n{agents_md}")
+    if write_enabled and spec is not None:
+        parts.append("\n" + _format_event_catalog(spec))
     if override:
         parts.append(f"\n\n{override}")
     return "\n".join(parts)
 
 
-def _make_tool_functions(tree: Tree, root_dir: Path) -> list[Any]:
+def _compute_allowed_tools(*, write_enabled: bool) -> list[str]:
+    tools = list(_BASE_TOOLS)
+    if write_enabled:
+        tools.append(_WRITE_TOOL)
+    return tools
+
+
+def _make_append_tool(tree: Tree, spec: Spec) -> Any:
+    @tool(
+        "append_event",
+        (
+            "Append a single event to a Log leaf. path: a /-prefixed tree path "
+            "pointing to a state=log node. type: the unprefixed event type from "
+            "the spec (e.g. 'candidate.advanced'). data: an object whose keys "
+            "match the event schema. causationid: optional. Idempotency is your "
+            "responsibility — retries will produce duplicate events."
+        ),
+        {"path": str, "type": str, "data": dict, "causationid": str},
+    )
+    async def _append(args: dict[str, Any]) -> dict[str, Any]:
+        causationid = args.get("causationid") or None
+        plan = prepare_append(
+            spec, tree, args["path"], args["type"], args["data"],
+            causationid=causationid,
+        )
+        if plan.issues:
+            return {
+                "content": [
+                    {"type": "text", "text": json.dumps([i.as_dict() for i in plan.issues])}
+                ],
+                "isError": True,
+            }
+        assert plan.log_path is not None and plan.event is not None
+        _append_event(plan.log_path, plan.event)
+        return {
+            "content": [
+                {"type": "text", "text": json.dumps({"id": plan.event.id, "ok": True})}
+            ]
+        }
+
+    return _append
+
+
+def _make_tool_functions(
+    tree: Tree, root_dir: Path, spec: Spec | None = None, *, write_enabled: bool = False
+) -> list[Any]:
     @tool("list_tree", "List direct children at a path.", {"path": str, "depth": int})
     async def _list_tree(args: dict[str, Any]) -> dict[str, Any]:
         rows = list_tree(tree, args.get("path", "/"), depth=int(args.get("depth", 1)))
@@ -81,35 +157,40 @@ def _make_tool_functions(tree: Tree, root_dir: Path) -> list[Any]:
         rows = read_log(tree, args["path"], root_dir, limit=int(args.get("limit", 100)))
         return {"content": [{"type": "text", "text": json.dumps(rows, default=str)}]}
 
-    return [_list_tree, _get_state, _find_state, _read_log]
+    tools: list[Any] = [_list_tree, _get_state, _find_state, _read_log]
+    if write_enabled and spec is not None:
+        tools.append(_make_append_tool(tree, spec))
+    return tools
 
 
 @attrs.define(frozen=True, slots=True)
 class Harness:
-    """Claude Agent SDK harness wrapping a :class:`Tree` with the four tools."""
+    """Claude Agent SDK harness wrapping a :class:`Tree` with the pmstate tools."""
 
     tree: Tree
     root_dir: Path
     model: str = "claude-sonnet-4-6"
     system: str | None = None
     watch: bool = True
+    spec: Spec | None = None
+    write_enabled: bool = False
 
     def run(self, prompt: str | None = None) -> str | None:
         """Run a one-shot prompt (or interactive when ``prompt`` is ``None``)."""
         return anyio.run(self._run_async, prompt)
 
     async def _run_async(self, prompt: str | None) -> str | None:
-        tools = _make_tool_functions(self.tree, self.root_dir)
-        server = create_sdk_mcp_server(name="pmstate", version="0.2.1", tools=tools)
-        system_prompt = _build_system_prompt(self.tree, self.root_dir, self.system)
+        tools = _make_tool_functions(
+            self.tree, self.root_dir, self.spec, write_enabled=self.write_enabled
+        )
+        server = create_sdk_mcp_server(name="pmstate", version=__version__, tools=tools)
+        system_prompt = _build_system_prompt(
+            self.tree, self.root_dir, self.system,
+            spec=self.spec, write_enabled=self.write_enabled,
+        )
         options = ClaudeAgentOptions(
             mcp_servers={"pmstate": server},
-            allowed_tools=[
-                "mcp__pmstate__list_tree",
-                "mcp__pmstate__get_state",
-                "mcp__pmstate__find_state",
-                "mcp__pmstate__read_log",
-            ],
+            allowed_tools=_compute_allowed_tools(write_enabled=self.write_enabled),
             system_prompt=system_prompt,
             model=self.model,
         )
@@ -142,4 +223,10 @@ def _no_op_change_callback(_paths: set[Path]) -> None:
     return None
 
 
-__all__ = ["Harness", "_build_system_prompt", "_make_tool_functions"]
+__all__ = [
+    "Harness",
+    "_build_system_prompt",
+    "_compute_allowed_tools",
+    "_format_event_catalog",
+    "_make_tool_functions",
+]

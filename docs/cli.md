@@ -109,6 +109,58 @@ generated from each event's `schema` dict. Field types: `str`, `int`,
 `float`, `bool`. `seed` matches event-type prefixes against leaf names where
 possible, otherwise round-robins across all event types.
 
+## `pmstate append`
+
+Append a single event to a Log leaf, with spec-aware validation. Shares the
+same validation core as the agent write tool exposed by `pmstate run --write`,
+so messages are byte-identical between the two surfaces.
+
+```
+pmstate append PATH --type TYPE --data JSON [--source S] [--subject S] [--causationid ID] [--json]
+```
+
+| Flag | Description |
+|------|-------------|
+| `PATH` (positional) | Tree path of the target Log leaf (e.g. `/procurement/quotes`). |
+| `--type TYPE` | Event type. Accepts both prefixed (`pmstate.candidate.advanced`) and unprefixed (`candidate.advanced`) forms. |
+| `--data JSON` | Event payload as a JSON object. Pass `-` to read JSON from stdin. |
+| `--source S` | Override the event `source`. Defaults to `PATH`. |
+| `--subject S` | Optional event `subject`. |
+| `--causationid ID` | Optional causation id (links to a parent event). |
+| `--json` | Emit JSON output (success object or issue array) instead of text. |
+
+### Exit codes
+
+`0` on success. `1` on validation error, missing project, JSON parse error, or
+write failure.
+
+### `--json` shape
+
+On success:
+```json
+{"id": "01J...ULID", "path": "/abs/path/state/quotes.jsonl", "bytes": 312}
+```
+
+On failure (validation or JSON parse):
+```json
+[{"file": "<append>", "line": null, "level": "error", "msg": "..."}]
+```
+
+The failure shape matches `pmstate validate --json` (same `Issue` schema) so
+agents can reuse one parser.
+
+### Examples
+
+```bash
+# Explicit form
+pmstate append /procurement/quotes --type quote.received \
+  --data '{"vendor":"acme","amount":100,"currency":"USD"}'
+
+# Stdin form (useful when piping from a generator)
+echo '{"vendor":"beta","amount":50,"currency":"EUR"}' \
+  | pmstate append /procurement/quotes --type quote.received --data -
+```
+
 ## `pmstate run`
 
 Dispatch a one-shot prompt to `Harness.run` against the project tree.

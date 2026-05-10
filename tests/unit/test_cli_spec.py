@@ -12,6 +12,7 @@ from pmstate.cli._spec import (
     Spec,
     SpecError,
     TreeSpec,
+    coerce_field,
     parse_spec,
 )
 
@@ -229,3 +230,76 @@ tree:
 """
     with pytest.raises(SpecError, match="'children' must be a list"):
         parse_spec(_write(tmp_path, body))
+
+
+def test_event_schema_unsupported_field_type(tmp_path: Path) -> None:
+    body = """\
+name: x
+pmstate_version: '0.2.0'
+tree:
+  root: r
+  nodes:
+    - path: /a
+      children: []
+events:
+  bad.event:
+    schema: {a: list}
+"""
+    with pytest.raises(SpecError) as excinfo:
+        parse_spec(_write(tmp_path, body))
+    assert "'a'" in excinfo.value.msg
+    assert "unsupported type 'list'" in excinfo.value.msg
+    assert "valid types: str, int, float, bool" in excinfo.value.msg
+
+
+def test_coerce_field_str() -> None:
+    assert coerce_field("hi", "str") == "hi"
+
+
+def test_coerce_field_str_rejects_int() -> None:
+    with pytest.raises(TypeError, match="expected str, got int"):
+        coerce_field(1, "str")
+
+
+def test_coerce_field_int() -> None:
+    assert coerce_field(1, "int") == 1
+
+
+def test_coerce_field_int_rejects_bool() -> None:
+    with pytest.raises(TypeError, match="expected int, got bool"):
+        coerce_field(True, "int")
+
+
+def test_coerce_field_int_rejects_float() -> None:
+    with pytest.raises(TypeError, match="expected int, got float"):
+        coerce_field(1.5, "int")
+
+
+def test_coerce_field_float_accepts_int() -> None:
+    result = coerce_field(1, "float")
+    assert result == 1
+    assert isinstance(result, float)
+
+
+def test_coerce_field_float() -> None:
+    assert coerce_field(1.5, "float") == 1.5
+
+
+def test_coerce_field_float_rejects_bool() -> None:
+    with pytest.raises(TypeError, match="expected float, got bool"):
+        coerce_field(True, "float")
+
+
+def test_coerce_field_bool() -> None:
+    assert coerce_field(True, "bool") is True
+    assert coerce_field(False, "bool") is False
+
+
+def test_coerce_field_bool_rejects_int() -> None:
+    with pytest.raises(TypeError, match="expected bool, got int"):
+        coerce_field(1, "bool")
+
+
+def test_coerce_field_unknown_type() -> None:
+    with pytest.raises(ValueError, match="unsupported field type: 'list'"):
+        coerce_field([], "list")

@@ -48,8 +48,12 @@ cd my-process
 pmstate seed --n 30
 pmstate run "what's pending?"
 
-# 4. Record real state changes via the generated add.py
-python add.py candidate-advanced --leaf offers --from interviews --to offers --note "looked strong" --causationid seed-000002
+# 4. Record a real state change with `pmstate append`
+pmstate append /pipeline/offers --type candidate.advanced \
+  --data '{"from":"interviews","to":"offers","note":"looked strong"}'
+
+# 5. Or hand the writer to the agent (opt-in)
+pmstate run --write "advance Ada from interviews to offers"
 ```
 
 That's the full loop. The agent gets four tools (`list_tree`, `get_state`,
@@ -103,7 +107,7 @@ uv run python examples/procurement/run.py "what is pending in procurement?"
 
 ## Status
 
-v0.2 alpha. Open but not supported. API will break  
+v0.3 alpha. Open but not supported. API will break
 without warning. PRs not yet accepted. Stars welcome.
 
 ## License

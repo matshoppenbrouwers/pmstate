@@ -156,7 +156,7 @@ Walk the user's words once and answer these five questions:
    view. Otherwise leave reducer off.
 
 5. **Pin `pmstate_version`** to the version installed in the project
-   (currently `"0.2.0"`). This is read by `init --upgrade`.
+   (currently `"0.3.0"`). This is read by `init --upgrade`.
 
 ## Common pitfalls
 
@@ -169,3 +169,37 @@ Walk the user's words once and answer these five questions:
 - **Two children with the same `name`.** Rejected at tree construction.
 - **Event payloads with non-flat schemas.** v1 supports `field: str-type`
   only. Nest later if you need it (backlog).
+
+## Write surface for agents
+
+`pmstate run --write "..."` opts the harness into a fifth tool,
+`append_event`, validated against the spec's `events:` block via the same
+core that backs `pmstate append`. Enable it when the agent should be the one
+recording state changes (autonomous workflows, demos), keep it off when the
+human is the source of truth and the agent is read-only.
+
+The tool body accepts:
+- `path` (str): `/`-prefixed tree path to a `state: log` leaf.
+- `type` (str): event type. Both prefixed (`pmstate.candidate.advanced`) and
+  unprefixed (`candidate.advanced`) forms work — the validator normalises.
+- `data` (object): payload whose keys must match the event's spec schema.
+- `causationid` (str, optional): set this when the new event is a
+  consequence of an earlier event. Empty string means "no parent".
+
+**Idempotency caveat.** The validator rejects malformed writes but does
+**not** dedupe. Retries (network blip, agent self-correction) will produce
+duplicate events. Application-layer reducers should derive a stable key
+from the payload and dedupe on read; a `causationid` chain helps audit the
+duplicates. Stable dedup keys at write time are on the v0.4 backlog.
+
+Worked example — a hiring-pipeline agent prompt that uses the tool:
+
+```text
+You manage a hiring pipeline. When the user says "advance Ada from
+interviews to offers", call append_event with:
+  path: /pipeline/offers
+  type: candidate.advanced
+  data: {"from": "interviews", "to": "offers", "note": "user-initiated"}
+  causationid: ""
+Confirm in plain English after a successful append.
+```

@@ -6,6 +6,48 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) loosely
 during the 0.x phase: **breaking changes may ship in any release without
 warning until 1.0**.
 
+## [0.3.0] — 2026-05-10
+
+The agent write surface. After v0.3 a freshly-init'd project supports
+typed event writes from the CLI (`pmstate append`) *and*, opt-in, from
+the Claude harness (`pmstate run --write`). Both paths share one
+spec-aware validator, so the validation behaviour is byte-identical
+across surfaces.
+
+### Added
+- `pmstate append PATH --type T --data JSON` — fifth CLI verb. Validates
+  the path is a Log leaf, the event type is declared in the spec, the
+  payload keys + types match `events.<type>.schema`, and the serialised
+  envelope fits the 4000-byte ceiling. Accepts `--data -` to read from
+  stdin and `--causationid` / `--subject` / `--source` overrides.
+  `--json` mode emits a `{id, path, bytes}` shape on success and the
+  same `Issue` array as `pmstate validate --json` on failure.
+- `Harness(write_enabled=True, spec=…)` — opt-in fifth tool
+  `append_event` whose argument schema is `(path, type, data,
+  causationid)` and whose validation reuses the CLI's `prepare_append`
+  core. The system prompt under `write_enabled=True` enumerates each
+  spec event-name and its field schema so the agent doesn't guess.
+- `pmstate run --write` — CLI flag that flips the harness into
+  write-enabled mode. Off by default (backward compat); requires a
+  parseable `pmstate.yaml` when set.
+- `pmstate.cli._append.prepare_append` — shared validation core; pure
+  function that returns an `AppendPlan` (errors-as-data, no
+  exceptions).
+
+### Fixed
+- `_spec.py` field-type parser now rejects unsupported types — the spec
+  must use one of `{str, int, float, bool}`. Previously stored any
+  string silently, deferring the failure to seed/append time.
+
+### Internal
+- Lifted `_build_tree` / `_load_tree_module` from `cli/run.py` to
+  `cli/_project.py`; `cli/run.py` keeps a one-line shim so existing
+  `from pmstate.cli.run import _build_tree` imports still work.
+- MCP server version literal now references `pmstate.__version__` instead
+  of a hard-coded string.
+- Bumped `pmstate_version` reference in `docs/spec-authoring.md` to
+  `"0.3.0"`.
+
 ## 0.2.1 - 2026-05-10
 
 Closes the v0.2.0 write-surface gap. After `pmstate init` a project is

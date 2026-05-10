@@ -1,4 +1,4 @@
-"""pmstate CLI: argparse dispatch for ``init``, ``validate``, ``seed``, ``run``."""
+"""pmstate CLI: argparse dispatch for ``init``, ``validate``, ``seed``, ``append``, ``run``."""
 
 from __future__ import annotations
 
@@ -16,13 +16,15 @@ def _build_parser() -> tuple[argparse.ArgumentParser, dict[str, Handler]]:
         description="Filesystem-shaped agent processes. The directory tree IS the state.",
     )
     parser.add_argument("--version", action="version", version=f"pmstate {__version__}")
-    sub = parser.add_subparsers(dest="verb", metavar="{init,validate,seed,run}")
+    sub = parser.add_subparsers(dest="verb", metavar="{init,validate,seed,append,run}")
 
     _add_init(sub)
     _add_validate(sub)
     _add_seed(sub)
+    _add_append(sub)
     _add_run(sub)
 
+    from pmstate.cli.append import cmd_append  # noqa: PLC0415 — keep imports local
     from pmstate.cli.init import cmd_init  # noqa: PLC0415 — keep imports local
     from pmstate.cli.run import cmd_run  # noqa: PLC0415 — lazy: optional dep
     from pmstate.cli.seed import cmd_seed  # noqa: PLC0415 — keep imports local
@@ -32,6 +34,7 @@ def _build_parser() -> tuple[argparse.ArgumentParser, dict[str, Handler]]:
         "init": cmd_init,
         "validate": cmd_validate,
         "seed": cmd_seed,
+        "append": cmd_append,
         "run": cmd_run,
     }
     return parser, handlers
@@ -58,6 +61,23 @@ def _add_seed(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p.add_argument("--force", action="store_true", help="Overwrite non-empty state/.")
 
 
+def _add_append(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    p = sub.add_parser("append", help="Append a single event to a Log leaf.")
+    p.add_argument("path", help="Tree path of the target Log leaf (e.g. /procurement/quotes).")
+    p.add_argument("--type", required=True, help="Event type (with or without 'pmstate.' prefix).")
+    p.add_argument(
+        "--data", required=True,
+        help="JSON object with the event data ('-' to read stdin).",
+    )
+    p.add_argument("--source", default=None, help="Override the event source (default: --path).")
+    p.add_argument("--subject", default=None, help="Optional event subject.")
+    p.add_argument(
+        "--causationid", default=None,
+        help="Optional causation id (links to a parent event).",
+    )
+    p.add_argument("--json", action="store_true", help="Emit JSON output (success or issue list).")
+
+
 def _add_run(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p = sub.add_parser("run", help="Run the harness against the project tree.")
     p.add_argument("prompt", nargs="?", default=None, help="Prompt (or read from stdin).")
@@ -65,6 +85,10 @@ def _add_run(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     watch.add_argument("--watch", dest="watch", action="store_true", help="Enable watcher.")
     watch.add_argument("--no-watch", dest="watch", action="store_false", help="Disable watcher.")
     p.set_defaults(watch=False)
+    p.add_argument(
+        "--write", action="store_true",
+        help="enable agent write tools (opt-in; requires valid pmstate.yaml)",
+    )
 
 
 def main(argv: list[str] | None = None) -> int:

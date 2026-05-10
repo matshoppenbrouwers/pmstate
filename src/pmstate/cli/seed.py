@@ -9,8 +9,8 @@ from pathlib import Path
 from typing import Any
 
 from pmstate.cli._discovery import find_project_root
+from pmstate.cli._project import _build_tree
 from pmstate.cli._spec import EventSchema, Spec, parse_spec
-from pmstate.cli.run import _build_tree
 from pmstate.envelope import Event
 from pmstate.node import Node
 from pmstate.storage import Log
