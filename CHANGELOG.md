@@ -6,6 +6,25 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) loosely
 during the 0.x phase: **breaking changes may ship in any release without
 warning until 1.0**.
 
+## 0.2.1 - 2026-05-10
+
+Closes the v0.2.0 write-surface gap. After `pmstate init` a project is
+now drivable end-to-end without hand-writing helper scripts.
+
+### Added
+- Generated `add.py` scaffold — one sub-command per event type declared
+  in `pmstate.yaml`, with `--leaf` for destination + one flag per
+  `EventSchema` field. Type-aware (`int`, `float`, `bool` → typed
+  argparse). Reserved-word-safe (uses `getattr` so `from`, `class`,
+  etc. work as field names). Auto-rendered by `init.py` and
+  regenerated on `init --upgrade` like `tree.py`.
+
+### Notes
+- Empty-spec projects (no events or no Log leaves) get an `add.py`
+  that exits with a helpful message.
+- Manual edits to `add.py` are overwritten by `init --upgrade` (the
+  file is spec-derived; treat it like `tree.py`).
+
 ## 0.2.0 - 2026-05-07
 
 First CLI release. The 4-verb `pmstate` command now subsumes the v0.1

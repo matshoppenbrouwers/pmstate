@@ -1,8 +1,8 @@
 # pmstate
 
-[![PyPI](https://img.shields.io/pypi/v/pmstate.svg)](https://pypi.org/project/pmstate/)
-[![CI](https://github.com/matshoppenbrouwers/pmstate/actions/workflows/ci.yml/badge.svg)](https://github.com/matshoppenbrouwers/pmstate/actions/workflows/ci.yml)
-[![Python](https://img.shields.io/pypi/pyversions/pmstate.svg)](https://pypi.org/project/pmstate/)
+[PyPI](https://pypi.org/project/pmstate/)
+[CI](https://github.com/matshoppenbrouwers/pmstate/actions/workflows/ci.yml)
+[Python](https://pypi.org/project/pmstate/)
 
 **The directory tree IS the process state.**
 
@@ -23,7 +23,7 @@ the state. That means:
 - An agent can `ls`-style introspect what's happening at any depth.
 - Branches spawn and die at runtime — no recompile.
 - Every event is a CloudEvents-shaped JSON line. Replayable, auditable,
-  human-readable.
+human-readable.
 - A human can `cat` a log file and see exactly what the agent saw.
 
 ## Install
@@ -47,6 +47,9 @@ cd my-process
 # 3. Seed deterministic events and ask a question
 pmstate seed --n 30
 pmstate run "what's pending?"
+
+# 4. Record real state changes via the generated add.py
+python add.py candidate-advanced --leaf offers --from interviews --to offers --note "looked strong" --causationid seed-000002
 ```
 
 That's the full loop. The agent gets four tools (`list_tree`, `get_state`,
@@ -58,36 +61,36 @@ tree on disk **is** the state.
 
 `pmstate.yaml` is the source of truth. To translate a natural-language
 request into a working tree, point Claude Code (or any orchestrating agent)
-at [`docs/spec-authoring.md`](docs/spec-authoring.md). It documents the
+at `[docs/spec-authoring.md](docs/spec-authoring.md)`. It documents the
 schema and includes three worked examples (linear pipeline, kanban, log +
 rollup hierarchy) plus a 5-rule recipe.
 
 ## Concepts
 
 - **Node** — a named position in the tree. May own `state` (a `Log` or
-  `Table`), a `view` (function: events → dict), a `reducer` (function:
-  children's views → dict), and `children`.
+`Table`), a `view` (function: events → dict), a `reducer` (function:
+children's views → dict), and `children`.
 - **Log** — append-only JSONL of CloudEvents-shaped events.
 - **Table** — JSON document for slowly-changing reference data.
 - **Tree** — the wrapper that gives you `spawn(parent, child)` and
-  `prune(path)` for runtime mutation.
+`prune(path)` for runtime mutation.
 - **Harness** — adapter that wires the four agent tools into an LLM runtime.
-  Ships `ClaudeHarness` today; the surface is harness-agnostic.
+Ships `ClaudeHarness` today; the surface is harness-agnostic.
 
 ## Quickstart
 
-**New to pmstate?** Walk through [`QUICKSTART.md`](QUICKSTART.md) — a
+**New to pmstate?** Walk through `[QUICKSTART.md](QUICKSTART.md)` — a
 10-minute guide that builds a working agent-navigable process tree from
 scratch using the CLI. Every concept is explained inline; every step has
 runnable code. The original "write the seven files yourself" path is
 preserved as an appendix.
 
-The full CLI reference lives at [`docs/cli.md`](docs/cli.md); the
+The full CLI reference lives at `[docs/cli.md](docs/cli.md)`; the
 agent-facing spec authoring guide is at
-[`docs/spec-authoring.md`](docs/spec-authoring.md).
+`[docs/spec-authoring.md](docs/spec-authoring.md)`.
 
 A larger end-to-end example lives at
-[`examples/procurement/`](examples/procurement/). After installing the
+`[examples/procurement/](examples/procurement/)`. After installing the
 `claude-sdk` extra and setting `ANTHROPIC_API_KEY`:
 
 ```bash
@@ -100,7 +103,7 @@ uv run python examples/procurement/run.py "what is pending in procurement?"
 
 ## Status
 
-v0.2 alpha. Open but not supported. One user (Laterite). API will break
+v0.2 alpha. Open but not supported. API will break  
 without warning. PRs not yet accepted. Stars welcome.
 
 ## License

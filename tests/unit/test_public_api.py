@@ -23,7 +23,7 @@ from pmstate import (
 
 
 def test_version_attribute() -> None:
-    assert pmstate.__version__ == "0.2.0"
+    assert pmstate.__version__ == "0.2.1"
 
 
 def test_phase_1_re_exports() -> None:

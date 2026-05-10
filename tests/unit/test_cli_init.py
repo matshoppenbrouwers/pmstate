@@ -29,6 +29,8 @@ tree:
 events:
   candidate.added:
     schema: {name: str, source: str}
+  candidate.advanced:
+    schema: {from: str, to: str, note: str}
 """
 
 
@@ -69,10 +71,60 @@ def test_from_spec_generates_files(tmp_path: Path) -> None:
     project = tmp_path / "proj"
     rc = main(["init", "--from-spec", str(spec_file), str(project)])
     assert rc == 0
-    for fname in ("tree.py", "views.py", "reducers.py", "chat.py", "AGENTS.md", "pmstate.yaml"):
+    expected = ("tree.py", "views.py", "reducers.py", "chat.py", "add.py", "AGENTS.md", "pmstate.yaml")
+    for fname in expected:
         assert (project / fname).is_file(), fname
     assert (project / "state" / ".gitignore").is_file()
     assert (project / "state" / ".gitignore").read_text().startswith("*\n")
+
+
+def test_add_py_is_valid_python(tmp_path: Path) -> None:
+    import ast as _ast
+
+    spec_file = tmp_path / "spec.yaml"
+    spec_file.write_text(_HIRING_YAML)
+    project = tmp_path / "proj"
+    main(["init", "--from-spec", str(spec_file), str(project)])
+    add_py = (project / "add.py").read_text()
+    _ast.parse(add_py)  # no SyntaxError
+    assert "candidate-added" in add_py
+    assert "candidate-advanced" in add_py
+    assert "LEAVES" in add_py
+    # Python keywords as field names must use getattr.
+    assert 'getattr(args, "from")' in add_py
+
+
+def test_add_py_no_events_or_leaves(tmp_path: Path) -> None:
+    import ast as _ast
+
+    spec_file = tmp_path / "spec.yaml"
+    spec_file.write_text(
+        "name: x\npmstate_version: '0.2.1'\ntree:\n  root: r\n  nodes:\n"
+        "    - path: /r/x\n      children:\n        - {name: t, state: table}\n"
+    )
+    project = tmp_path / "proj"
+    main(["init", "--from-spec", str(spec_file), str(project)])
+    add_py = (project / "add.py").read_text()
+    _ast.parse(add_py)
+    assert "nothing to append" in add_py
+
+
+def test_upgrade_regenerates_add_py(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    spec_file = tmp_path / "spec.yaml"
+    spec_file.write_text(_HIRING_YAML)
+    project = tmp_path / "proj"
+    main(["init", "--from-spec", str(spec_file), str(project)])
+    new_spec = _HIRING_YAML.replace(
+        "candidate.advanced:\n    schema: {from: str, to: str, note: str}",
+        "candidate.advanced:\n    schema: {from: str, to: str, note: str}\n"
+        "  candidate.rejected:\n    schema: {reason: str}",
+    )
+    (project / "pmstate.yaml").write_text(new_spec)
+    monkeypatch.chdir(project)
+    rc = main(["init", "--upgrade"])
+    assert rc == 0
+    add_py = (project / "add.py").read_text()
+    assert "candidate-rejected" in add_py
 
 
 def test_from_spec_round_trip(tmp_path: Path) -> None:

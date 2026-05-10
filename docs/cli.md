@@ -17,7 +17,14 @@ edit pmstate.yaml ──┐
                     │         │         └─ generates deterministic seed events
                     │         └─ checks that build_tree() and views compute
                     └─ scaffolds tree.py / views.py / reducers.py / chat.py
-                       / AGENTS.md / state/.gitignore
+                       / add.py / AGENTS.md / state/.gitignore
+```
+
+`add.py` is the project-local **write surface** — one sub-command per
+event type declared in `pmstate.yaml`. Append a real event with e.g.:
+
+```bash
+python add.py candidate-advanced --leaf offers --from interviews --to offers --note "..."
 ```
 
 ## Exit codes

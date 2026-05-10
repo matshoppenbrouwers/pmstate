@@ -12,7 +12,7 @@ from string import Template
 
 from pmstate.cli._discovery import find_project_root
 from pmstate.cli._io import write_file_safe
-from pmstate.cli._spec import NodeSpec, Spec, parse_spec
+from pmstate.cli._spec import EventSchema, NodeSpec, Spec, parse_spec
 
 _TEMPLATES_PKG = "pmstate.cli._templates"
 _STATE_GITIGNORE = "*\n!.gitignore\n"
@@ -140,12 +140,88 @@ def _render_agents_md(spec: Spec) -> str:
     return Template(_read_template("agents_md.tmpl")).substitute(tree_name=spec.name)
 
 
+def _log_leaf_names(spec: Spec) -> list[str]:
+    return [c.name for t in spec.nodes for c in t.children if c.state == "log"]
+
+
+def _render_leaves_dict(spec: Spec) -> str:
+    leaves = _log_leaf_names(spec)
+    if not leaves:
+        return "{}"
+    body = "\n".join(f'    "{name}": "state/{name}.jsonl",' for name in leaves)
+    return "{\n" + body + "\n}"
+
+
+def _render_event_subparser(evt_name: str, schema: EventSchema) -> str:
+    cmd = evt_name.replace(".", "-")
+    var = "_p_" + cmd.replace("-", "_")
+    help_str = f'"Append a pmstate.{evt_name} event."'
+    out = [
+        f'    {var} = sub.add_parser(',
+        f'        "{cmd}", help={help_str},',
+        '    )',
+        f'    {var}.add_argument("--leaf", required=True, choices=list(LEAVES))',
+    ]
+    for field, ftype in schema.fields.items():
+        if ftype == "bool":
+            out.append(
+                f'    {var}.add_argument('
+                f'"--{field}", action=argparse.BooleanOptionalAction, required=True)'
+            )
+        elif ftype in ("int", "float"):
+            out.append(f'    {var}.add_argument("--{field}", required=True, type={ftype})')
+        else:
+            out.append(f'    {var}.add_argument("--{field}", required=True)')
+    out.append(f'    {var}.add_argument("--causationid", default=None)')
+    out.append(f'    {var}.add_argument("--subject", default=None)')
+    return "\n".join(out)
+
+
+def _render_event_dispatch(evt_name: str, schema: EventSchema) -> str:
+    cmd = evt_name.replace(".", "-")
+    # Use getattr so Python keywords (from, class, …) work as schema field names.
+    fields_dict = ", ".join(f'"{f}": getattr(args, "{f}")' for f in schema.fields)
+    return (
+        f'    if args.cmd == "{cmd}":\n'
+        f"        append_event(Path(LEAVES[args.leaf]), Event.new(\n"
+        f'            type="pmstate.{evt_name}",\n'
+        f'            source=f"/manual/{{args.leaf}}",\n'
+        f"            data={{{fields_dict}}},\n"
+        f"            causationid=args.causationid,\n"
+        f"            subject=args.subject,\n"
+        f"        ))\n"
+        f'        print(f"appended pmstate.{evt_name} to {{args.leaf}}")\n'
+        f"        return"
+    )
+
+
+def _render_add_py(spec: Spec) -> str:
+    leaves = _log_leaf_names(spec)
+    events = list(spec.events.items())
+    if not leaves or not events:
+        subparsers_block = (
+            '    raise SystemExit("nothing to append: '
+            'pmstate.yaml needs `events:` and at least one `state: log` leaf")'
+        )
+        dispatch_block = "    return"
+    else:
+        subparsers_block = "\n".join(_render_event_subparser(n, s) for n, s in events)
+        dispatch_block = "\n".join(_render_event_dispatch(n, s) for n, s in events)
+    return Template(_read_template("add.py.tmpl")).substitute(
+        tree_name=spec.name,
+        leaves_dict=_render_leaves_dict(spec),
+        subparsers=subparsers_block,
+        dispatch=dispatch_block,
+    )
+
+
 def _generated_files(spec: Spec) -> dict[str, str]:
     return {
         "tree.py": _render_tree(spec),
         "views.py": _render_views(spec),
         "reducers.py": _render_reducers(spec),
         "chat.py": _render_chat(spec),
+        "add.py": _render_add_py(spec),
         "AGENTS.md": _render_agents_md(spec),
     }
 
@@ -269,6 +345,7 @@ def _do_upgrade(start: Path, *, force: bool) -> int:
         print(f"could not parse spec: {exc}", file=sys.stderr)
         return 1
     write_file_safe(root / "tree.py", _render_tree(spec), force=True)
+    write_file_safe(root / "add.py", _render_add_py(spec), force=True)
     if force:
         write_file_safe(root / "views.py", _render_views(spec), force=True)
         write_file_safe(root / "reducers.py", _render_reducers(spec), force=True)
