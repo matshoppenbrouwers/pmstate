@@ -75,8 +75,8 @@ class Table:
     def read(self) -> dict[str, Any]:
         """Return the view applied to the parsed JSON document; errors surface as data."""
         try:
-            with self.path.open("r", encoding="utf-8") as f:
-                doc = json.load(f)
+            backend = FilesystemBackend(self.path.parent)
+            doc = backend.read_doc(self.path.name)
             view = self.view or _default_table_view
             return view(doc)
         except Exception as exc:
