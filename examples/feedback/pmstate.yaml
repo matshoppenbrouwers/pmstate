@@ -1,0 +1,22 @@
+# Spec that *would* regenerate the generic feedback example tree.
+# Demonstrative only — the existing feedback code under examples/ is
+# hand-authored and not regenerated from this file.
+name: feedback_demo
+pmstate_version: "0.2.0"
+
+tree:
+  root: product
+  nodes:
+    - path: /feedback
+      reducer: feedback_rollup
+      children:
+        - {name: web,  state: log, view: source_view}
+        - {name: chat, state: log, view: source_view}
+
+events:
+  feedback.captured:
+    schema: {feedback_id: str, source: str, severity: str, summary: str}
+  feedback.triaged:
+    schema: {feedback_id: str, category: str, note: str}
+  feedback.resolved:
+    schema: {feedback_id: str, resolution: str}
