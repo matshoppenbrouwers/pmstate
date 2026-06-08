@@ -47,9 +47,14 @@ def test_mtime_change_invalidates_cache(tmp_path: Path) -> None:
 def test_repeated_call_uses_cache(tmp_path: Path) -> None:
     p = tmp_path / "AGENTS.md"
     p.write_text("cached", encoding="utf-8")
+    original_mtime = p.stat().st_mtime
     load_agents_md(tmp_path)
     p.write_text("after", encoding="utf-8")
-    os.utime(p, (p.stat().st_mtime, p.stat().st_mtime))
+    # Restore the original mtime so the cache key is unchanged: the loader must
+    # return the cached value even though the content changed. Setting it to the
+    # post-write mtime instead would be tick-resolution dependent (flaky on
+    # coarse-mtime filesystems like DrvFs).
+    os.utime(p, (original_mtime, original_mtime))
     assert load_agents_md(tmp_path) == "cached"
 
 
