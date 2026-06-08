@@ -86,5 +86,5 @@ scratch/
 _devdocs/
 
 # Generated example state (run seed_data.py to regenerate)
-examples/procurement/state/
+examples/*/state/
 examples/**/.pmstate/
