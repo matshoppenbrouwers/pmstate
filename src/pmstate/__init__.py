@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 from pmstate._paths import NodePathError
 from pmstate.agents_md import load_agents_md
+from pmstate.backends import Cursor, FilesystemBackend, StorageBackend, StorageError
 from pmstate.envelope import Event
 from pmstate.node import Node
 from pmstate.reader import ReaderError, read_events
@@ -31,16 +32,20 @@ def __getattr__(name: str) -> object:
     raise AttributeError(f"module 'pmstate' has no attribute {name!r}")
 
 
-__version__ = "0.3.1"
+__version__ = "0.4.0"
 
 __all__ = [
     "ClaudeHarness",
+    "Cursor",
     "Event",
     "EventTooLargeError",
+    "FilesystemBackend",
     "Log",
     "Node",
     "NodePathError",
     "ReaderError",
+    "StorageBackend",
+    "StorageError",
     "Table",
     "ToolError",
     "Tree",

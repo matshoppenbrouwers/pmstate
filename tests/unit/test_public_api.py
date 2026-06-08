@@ -8,12 +8,16 @@ import pytest
 
 import pmstate
 from pmstate import (
+    Cursor,
     Event,
     EventTooLargeError,
+    FilesystemBackend,
     Log,
     Node,
     NodePathError,
     ReaderError,
+    StorageBackend,
+    StorageError,
     Table,
     Tree,
     append_event,
@@ -27,7 +31,14 @@ HAS_CLAUDE_SDK = importlib.util.find_spec("claude_agent_sdk") is not None
 
 
 def test_version_attribute() -> None:
-    assert pmstate.__version__ == "0.3.1"
+    assert pmstate.__version__ == "0.4.0"
+
+
+def test_backends_re_exports() -> None:
+    assert StorageBackend is pmstate.StorageBackend
+    assert FilesystemBackend is pmstate.FilesystemBackend
+    assert Cursor is pmstate.Cursor
+    assert StorageError is pmstate.StorageError
 
 
 def test_phase_1_re_exports() -> None:

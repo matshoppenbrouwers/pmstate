@@ -6,6 +6,41 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) loosely
 during the 0.x phase: **breaking changes may ship in any release without
 warning until 1.0**.
 
+## [0.4.0] — 2026-06-08
+
+Introduces a pluggable **`StorageBackend` seam**: pmstate's persistence is no
+longer hard-bound to the filesystem. Today's behavior is refactored behind the
+seam with **zero behavior change** for filesystem users — a bare `Path` is
+auto-wrapped in a `FilesystemBackend`, so existing callers and generated
+projects keep working unchanged. This is the foundation for cloud backends
+(Supabase/Anvil) and the consolidated feedback pilot.
+
+### Added
+- `pmstate.backends` package: `StorageBackend` (a `typing.Protocol`),
+  `FilesystemBackend` (the default implementation and contract-test oracle),
+  `Cursor` (opaque, backend-defined ordering token), and `StorageError`.
+  All four are also re-exported at the top level (`from pmstate import
+  FilesystemBackend`).
+- Backend-agnostic conformance suite (`tests/backends/test_contract.py`)
+  parametrized over backends, plus an in-memory `FakeMemoryBackend` that
+  drives all four agent tools with no disk I/O — proving the seam is real.
+- Generic, vendor-neutral `examples/feedback/` worked example (multi-source
+  feedback tree, `source_view`, `feedback_rollup`, seed data, `AGENTS.md`)
+  demonstrating the model end-to-end.
+
+### Changed
+- `Log`/`Table`, `append_event`/`read_events`, `rollup` cache I/O, the four
+  tools (`get_state`/`find_state`/`list_tree`/`read_log`), the Claude SDK
+  adapter, and the CLI all route through a `StorageBackend` instead of touching
+  `pathlib` directly. Public signatures now accept `Path | StorageBackend`
+  (Path auto-wrapped); agent-facing tool schemas are unchanged.
+
+### Compatibility
+- No behavior change for filesystem users: `append_event(path, …)`,
+  `read_events(path, …)`, and `Log(path=…)` still work byte-identically; the
+  `.pmstate/rollup.json` cache layout is unchanged. New exports are purely
+  additive.
+
 ## [0.3.1] — 2026-05-10
 
 Post-implementation polish on the v0.3.0 write surface. No behaviour
