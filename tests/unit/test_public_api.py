@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import importlib.util
+
 import pytest
 
 import pmstate
@@ -20,6 +22,8 @@ from pmstate import (
     load_agents_md,
     read_events,
 )
+
+HAS_CLAUDE_SDK = importlib.util.find_spec("claude_agent_sdk") is not None
 
 
 def test_version_attribute() -> None:
@@ -56,6 +60,7 @@ def test_phase_5_re_exports() -> None:
     assert pmstate.ToolError is not None
 
 
+@pytest.mark.skipif(not HAS_CLAUDE_SDK, reason="requires claude-sdk extra")
 def test_phase_6_claude_harness_lazy_import() -> None:
     Harness = pmstate.ClaudeHarness
     assert Harness.__name__ == "Harness"
@@ -68,4 +73,8 @@ def test_unknown_attribute_raises() -> None:
 
 def test_all_list_matches_module_attrs() -> None:
     for name in pmstate.__all__:
+        if name == "ClaudeHarness" and not HAS_CLAUDE_SDK:
+            with pytest.raises(ImportError, match="claude-sdk extra"):
+                getattr(pmstate, name)
+            continue
         assert hasattr(pmstate, name), f"__all__ lists {name!r} but it's not on the module"
