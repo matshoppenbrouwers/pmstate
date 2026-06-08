@@ -175,7 +175,7 @@ def test_run_with_fake_sdk_captures_allowed_tools(
         def __init__(self, options: Any) -> None:
             captured["options"] = options
 
-        async def __aenter__(self) -> "_FakeClient":
+        async def __aenter__(self) -> _FakeClient:
             return self
 
         async def __aexit__(self, *_: Any) -> None:
