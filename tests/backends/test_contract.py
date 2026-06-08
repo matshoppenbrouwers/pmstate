@@ -1,7 +1,8 @@
 """Backend-agnostic contract suite for StorageBackend implementations.
 
-Parametrized over a ``backend`` fixture. Today only FilesystemBackend is
-covered; a future Supabase/Anvil backend slots in by adding one fixture param.
+Parametrized over a ``backend`` fixture covering FilesystemBackend (on disk)
+and FakeMemoryBackend (dict-backed). A future Supabase/Anvil backend slots in
+by adding one fixture param.
 """
 
 from __future__ import annotations
@@ -11,12 +12,15 @@ from typing import Any
 import pytest
 
 from pmstate.backends import FilesystemBackend, StorageBackend
+from tests.backends.conftest import FakeMemoryBackend
 
 
-@pytest.fixture(params=["filesystem"])
+@pytest.fixture(params=["filesystem", "memory"])
 def backend(request: pytest.FixtureRequest, tmp_path: Any) -> StorageBackend:
     if request.param == "filesystem":
         return FilesystemBackend(tmp_path)
+    if request.param == "memory":
+        return FakeMemoryBackend()
     raise ValueError(f"unknown backend param: {request.param}")
 
 
