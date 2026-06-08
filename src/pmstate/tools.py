@@ -9,11 +9,12 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from pmstate.backends import FilesystemBackend, StorageBackend
 from pmstate.node import Node
-from pmstate.reader import read_events
-from pmstate.rollup import compute_view_at
+from pmstate.rollup import compute_view
 from pmstate.storage import Log
 from pmstate.tree import Tree
+from pmstate.upcasters import default_registry
 
 _LIST_DEPTH_MAX = 3
 _FIND_RESULT_MAX = 200
@@ -22,6 +23,13 @@ _LOG_LIMIT_MAX = 1000
 
 class ToolError(RuntimeError):
     """Raised by the agent-facing tools for programmer-fault conditions."""
+
+
+def _as_backend(root: Path | StorageBackend) -> StorageBackend:
+    """Accept a ``StorageBackend`` directly, or wrap a ``Path`` as a filesystem one."""
+    if isinstance(root, Path):
+        return FilesystemBackend(root)
+    return root
 
 
 def list_tree(tree: Tree, path: str = "/", depth: int = 1) -> list[dict[str, Any]]:
@@ -60,10 +68,11 @@ def _describe(node: Node, full_path: str) -> dict[str, Any]:
     }
 
 
-def get_state(tree: Tree, path: str, root_dir: Path) -> dict[str, Any]:
+def get_state(tree: Tree, path: str, root_dir: Path | StorageBackend) -> dict[str, Any]:
     """Return the rolled-up view at ``path``. Errors surface as data."""
     try:
-        return compute_view_at(tree, path, root_dir)
+        node = tree.get(path)
+        return compute_view(node, _as_backend(root_dir), node_path=path or "/")
     except Exception as exc:
         return {
             "error": str(exc),
@@ -76,7 +85,7 @@ def find_state(
     tree: Tree,
     query: str,
     *,
-    root_dir: Path,
+    root_dir: Path | StorageBackend,
     path_glob: str | None = None,
     max_results: int = 50,
 ) -> list[dict[str, Any]]:
@@ -87,12 +96,13 @@ def find_state(
     """
     if max_results < 1 or max_results > _FIND_RESULT_MAX:
         raise ValueError(f"max_results must be in [1, {_FIND_RESULT_MAX}]; got {max_results}")
+    backend = _as_backend(root_dir)
     matches: list[dict[str, Any]] = []
     queue: deque[tuple[Node, str]] = deque([(tree.root, "/")])
     while queue and len(matches) < max_results:
         node, node_path = queue.popleft()
         if path_glob is None or fnmatch.fnmatchcase(node_path, path_glob):
-            view = get_state(tree, node_path, root_dir)
+            view = get_state(tree, node_path, backend)
             blob = json.dumps(view, default=str, ensure_ascii=False)
             if query in blob:
                 matches.append({"path": node_path, "snippet": _snippet(blob, query)})
@@ -114,7 +124,7 @@ def _snippet(blob: str, query: str, *, window: int = 80) -> str:
 def read_log(
     tree: Tree,
     path: str,
-    root_dir: Path,
+    root_dir: Path | StorageBackend,
     *,
     start: int | None = None,
     end: int | None = None,
@@ -131,7 +141,15 @@ def read_log(
     node = tree.get(path)
     if not isinstance(node.state, Log):
         raise ToolError(f"node at {path!r} does not have a Log state")
-    log_path = node.state.path
-    if not log_path.is_absolute():
-        log_path = root_dir / log_path
-    return list(read_events(log_path, start=start, end=end, limit=limit, filter=filter))
+    backend = _as_backend(root_dir)
+    after = str(start) if start is not None else None
+    until = str(end) if end is not None else None
+    rows: list[dict[str, Any]] = []
+    for raw_event in backend.read(str(node.state.path), after=after, until=until):
+        decoded = default_registry.upcast(raw_event)
+        if filter is not None and not filter(decoded):
+            continue
+        if len(rows) >= limit:
+            break
+        rows.append(decoded)
+    return rows

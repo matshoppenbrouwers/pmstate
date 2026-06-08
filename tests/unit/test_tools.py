@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from pmstate.backends import FilesystemBackend
 from pmstate.envelope import Event
 from pmstate.node import Node
 from pmstate.storage import Log, Table
@@ -198,3 +199,30 @@ def test_read_log_relative_path_resolves_under_root(tmp_path: Path) -> None:
     tree = Tree("x", root=Node("a", state=Log(rel)))
     rows: list[Any] = read_log(tree, "/", tmp_path)
     assert len(rows) == 1
+
+
+# ---- StorageBackend seam: all four tools accept a backend (2B-1) ----
+
+
+def test_tools_accept_storage_backend(tmp_path: Path) -> None:
+    tree = _build(tmp_path)
+    backend = FilesystemBackend(tmp_path)
+
+    assert get_state(tree, "/procurement/quotes", backend)["count"] == 3
+    matches = find_state(tree, "count", root_dir=backend)
+    assert any("/quotes" in m["path"] for m in matches)
+    rows = read_log(tree, "/procurement/quotes", backend)
+    assert [r["data"]["i"] for r in rows] == [0, 1, 2]
+
+
+def test_read_log_backend_honours_limit_and_filter(tmp_path: Path) -> None:
+    tree = _build(tmp_path)
+    backend = FilesystemBackend(tmp_path)
+    rows = read_log(
+        tree,
+        "/procurement/quotes",
+        backend,
+        limit=1,
+        filter=lambda d: d["data"]["i"] > 0,
+    )
+    assert [r["data"]["i"] for r in rows] == [1]

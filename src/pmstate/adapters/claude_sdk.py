@@ -21,9 +21,10 @@ from claude_agent_sdk import (
 from pmstate import __version__
 from pmstate._watcher import watch
 from pmstate.agents_md import load_agents_md
+from pmstate.backends import FilesystemBackend, StorageBackend
 from pmstate.cli._append import prepare_append
 from pmstate.cli._spec import Spec
-from pmstate.tools import find_state, get_state, list_tree, read_log
+from pmstate.tools import _as_backend, find_state, get_state, list_tree, read_log
 from pmstate.tree import Tree
 from pmstate.writer import append_event as _append_event
 
@@ -48,6 +49,15 @@ _BASE_TOOLS = (
 _WRITE_TOOL = "mcp__pmstate__append_event"
 
 
+def _root_path(root_dir: Path | StorageBackend) -> Path | None:
+    """The on-disk root for filesystem-derived helpers, or None for non-FS backends."""
+    if isinstance(root_dir, Path):
+        return root_dir
+    if isinstance(root_dir, FilesystemBackend):
+        return root_dir.root
+    return None
+
+
 def _format_event_catalog(spec: Spec) -> str:
     if not spec.events:
         return "No event types declared in the spec."
@@ -60,14 +70,15 @@ def _format_event_catalog(spec: Spec) -> str:
 
 def _build_system_prompt(
     tree: Tree,
-    root_dir: Path,
+    root_dir: Path | StorageBackend,
     override: str | None,
     *,
     spec: Spec | None = None,
     write_enabled: bool = False,
 ) -> str:
     parts = [_TOOL_DESCRIPTIONS, f'\nProcess tree name: "{tree.name}"']
-    agents_md = load_agents_md(root_dir)
+    root_path = _root_path(root_dir)
+    agents_md = load_agents_md(root_path) if root_path is not None else None
     if agents_md:
         parts.append(f"\nProject context (from AGENTS.md):\n\n{agents_md}")
     if write_enabled and spec is not None:
@@ -121,8 +132,14 @@ def _make_append_tool(tree: Tree, spec: Spec) -> Any:
 
 
 def _make_tool_functions(
-    tree: Tree, root_dir: Path, spec: Spec | None = None, *, write_enabled: bool = False
+    tree: Tree,
+    root_dir: Path | StorageBackend,
+    spec: Spec | None = None,
+    *,
+    write_enabled: bool = False,
 ) -> list[Any]:
+    backend = _as_backend(root_dir)
+
     @tool("list_tree", "List direct children at a path.", {"path": str, "depth": int})
     async def _list_tree(args: dict[str, Any]) -> dict[str, Any]:
         rows = list_tree(tree, args.get("path", "/"), depth=int(args.get("depth", 1)))
@@ -130,7 +147,7 @@ def _make_tool_functions(
 
     @tool("get_state", "Get the rolled-up view at a path.", {"path": str})
     async def _get_state(args: dict[str, Any]) -> dict[str, Any]:
-        view = get_state(tree, args["path"], root_dir)
+        view = get_state(tree, args["path"], backend)
         return {"content": [{"type": "text", "text": json.dumps(view, default=str)}]}
 
     @tool(
@@ -142,7 +159,7 @@ def _make_tool_functions(
         rows = find_state(
             tree,
             args["query"],
-            root_dir=root_dir,
+            root_dir=backend,
             path_glob=args.get("path_glob") or None,
             max_results=int(args.get("max_results", 50)),
         )
@@ -154,7 +171,7 @@ def _make_tool_functions(
         {"path": str, "limit": int},
     )
     async def _read_log(args: dict[str, Any]) -> dict[str, Any]:
-        rows = read_log(tree, args["path"], root_dir, limit=int(args.get("limit", 100)))
+        rows = read_log(tree, args["path"], backend, limit=int(args.get("limit", 100)))
         return {"content": [{"type": "text", "text": json.dumps(rows, default=str)}]}
 
     tools: list[Any] = [_list_tree, _get_state, _find_state, _read_log]
@@ -168,7 +185,7 @@ class Harness:
     """Claude Agent SDK harness wrapping a :class:`Tree` with the pmstate tools."""
 
     tree: Tree
-    root_dir: Path
+    root_dir: Path | StorageBackend
     model: str = "claude-sonnet-4-6"
     system: str | None = None
     watch: bool = True
@@ -196,9 +213,10 @@ class Harness:
         )
 
         stop_event: threading.Event | None = None
-        if self.watch:
+        root_path = _root_path(self.root_dir)
+        if self.watch and root_path is not None:
             stop_event = threading.Event()
-            watch(self.root_dir, _no_op_change_callback, stop_event=stop_event)
+            watch(root_path, _no_op_change_callback, stop_event=stop_event)
 
         try:
             async with ClaudeSDKClient(options=options) as client:
