@@ -9,6 +9,9 @@ from typing import Any
 
 from pmstate.backends.base import Cursor
 
+_CACHE_DIR_NAME = ".pmstate"
+_CACHE_FILE_NAME = "rollup.json"
+
 
 class ReaderError(ValueError):
     """Raised when a JSONL line cannot be decoded."""
@@ -29,6 +32,12 @@ class FilesystemBackend:
     def _resolve(self, stream: str) -> Path:
         """Map a logical stream to its on-disk path under ``root``."""
         return self.root / stream
+
+    def _node_dir(self, node_path: str) -> Path:
+        """Map a logical node path to its on-disk directory under ``root``."""
+        if node_path in {"", "/"}:
+            return self.root
+        return self.root / node_path.lstrip("/")
 
     def append(self, stream: str, event: dict[str, Any]) -> Cursor:
         """Append one event as a JSONL line; return the post-write byte offset."""
@@ -78,3 +87,32 @@ class FilesystemBackend:
                     raise ReaderError(path, line_number, text) from exc
                 yield decoded
                 yielded += 1
+
+    def read_doc(self, stream: str) -> Any:
+        """Parse and return the JSON document stored at the stream."""
+        with self._resolve(stream).open("r", encoding="utf-8") as f:
+            return json.load(f)
+
+    def write_doc(self, stream: str, doc: Any) -> None:
+        """Write the JSON document to the stream."""
+        path = self._resolve(stream)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(doc, default=str), encoding="utf-8")
+
+    def read_cache(self, node_path: str) -> tuple[str, dict[str, Any]] | None:
+        """Return the cached ``(key, view)`` for the node, or None on miss/corruption."""
+        cache_path = self._node_dir(node_path) / _CACHE_DIR_NAME / _CACHE_FILE_NAME
+        try:
+            with cache_path.open("r", encoding="utf-8") as f:
+                cached = json.load(f)
+            return cached["key"], cached["view"]
+        except (FileNotFoundError, KeyError, json.JSONDecodeError):
+            return None
+
+    def write_cache(self, node_path: str, key: str, view: dict[str, Any]) -> None:
+        """Store the ``(key, view)`` rollup cache under ``<node>/.pmstate/rollup.json``."""
+        cache_path = self._node_dir(node_path) / _CACHE_DIR_NAME / _CACHE_FILE_NAME
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(
+            json.dumps({"key": key, "view": view}, default=str), encoding="utf-8"
+        )
