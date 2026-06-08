@@ -139,7 +139,13 @@ def compute_view(
     return result
 
 
-def compute_view_at(tree: Tree, path: str, root_dir: Path) -> dict[str, Any]:
-    """Compute the rolled-up view for the node at ``path`` inside ``tree``."""
+def compute_view_at(
+    tree: Tree, path: str, root_dir: Path | StorageBackend
+) -> dict[str, Any]:
+    """Compute the rolled-up view for the node at ``path`` inside ``tree``.
+
+    ``root_dir`` is a :class:`StorageBackend`; a bare :class:`~pathlib.Path` is
+    accepted for back-compat and wrapped in a :class:`FilesystemBackend`.
+    """
     node = tree.get(path)
-    return compute_view(node, FilesystemBackend(root_dir), node_path=path or "/")
+    return compute_view(node, _coerce_backend(root_dir), node_path=path or "/")

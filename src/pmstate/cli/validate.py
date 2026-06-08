@@ -12,6 +12,8 @@ from typing import Any, Literal
 
 import attrs
 
+from pmstate.backends import StorageBackend
+from pmstate.backends.filesystem import FilesystemBackend
 from pmstate.cli._discovery import find_project_root
 from pmstate.cli._spec import SpecError, parse_spec
 from pmstate.cli.run import RunError, _build_tree
@@ -40,6 +42,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
     if root is None:
         print("not in a pmstate project — run `pmstate init` first", file=sys.stderr)
         return 1
+    backend = FilesystemBackend(root)
     issues: list[Issue] = []
     spec_issues = check_spec_parses(root)
     issues.extend(spec_issues)
@@ -48,7 +51,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
         tree_issues, tree = check_tree_imports(root)
         issues.extend(tree_issues)
         if tree is not None:
-            issues.extend(check_compute_view_at_root(root, tree))
+            issues.extend(check_compute_view_at_root(root, tree, backend))
     issues.extend(check_agents_md_present(root))
     if args.strict:
         issues.extend(_run_strict_checks(root))
@@ -74,9 +77,11 @@ def check_tree_imports(root: Path) -> tuple[list[Issue], Tree | None]:
     return [Issue(file=str(root / "tree.py"), line=None, level="error", msg=msg)], None
 
 
-def check_compute_view_at_root(root: Path, tree: Tree) -> list[Issue]:
+def check_compute_view_at_root(
+    root: Path, tree: Tree, backend: StorageBackend
+) -> list[Issue]:
     try:
-        compute_view_at(tree, "/", root)
+        compute_view_at(tree, "/", backend)
     except Exception as exc:
         return [
             Issue(

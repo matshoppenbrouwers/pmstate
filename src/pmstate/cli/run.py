@@ -6,6 +6,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from pmstate.backends.filesystem import FilesystemBackend
 from pmstate.cli._discovery import find_project_root
 from pmstate.cli._project import RunError, _build_tree, _load_tree_module
 
@@ -52,7 +53,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     from pmstate.adapters.claude_sdk import Harness  # noqa: PLC0415 — lazy: optional dep
 
     harness = Harness(
-        tree=tree, root_dir=root, watch=bool(args.watch),
+        tree=tree, root_dir=FilesystemBackend(root), watch=bool(args.watch),
         spec=spec, write_enabled=write_enabled,
     )
     reply = harness.run(prompt)
