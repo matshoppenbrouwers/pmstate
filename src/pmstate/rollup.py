@@ -24,14 +24,14 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from pmstate.backends.base import StorageBackend
+from pmstate.backends.filesystem import FilesystemBackend
 from pmstate.storage import Log, Table
 
 if TYPE_CHECKING:
     from pmstate.node import Node
     from pmstate.tree import Tree
 
-_CACHE_DIR_NAME = ".pmstate"
-_CACHE_FILE_NAME = "rollup.json"
 _WS_RE = re.compile(r"\s+")
 _COMMENT_RE = re.compile(r"#[^\n]*")
 
@@ -62,26 +62,11 @@ def _cache_key(
     return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()
 
 
-def _load_cache(cache_path: Path) -> tuple[str, dict[str, Any]] | None:
-    try:
-        with cache_path.open("r", encoding="utf-8") as f:
-            cached = json.load(f)
-        return cached["key"], cached["view"]
-    except (FileNotFoundError, KeyError, json.JSONDecodeError):
-        return None
-
-
-def _store_cache(cache_path: Path, key: str, view: dict[str, Any]) -> None:
-    cache_path.parent.mkdir(parents=True, exist_ok=True)
-    cache_path.write_text(
-        json.dumps({"key": key, "view": view}, default=str), encoding="utf-8"
-    )
-
-
-def _on_disk_path(root: Path, node_path: str) -> Path:
-    if node_path in {"", "/"}:
-        return root
-    return root / node_path.lstrip("/")
+def _coerce_backend(backend: StorageBackend | Path) -> StorageBackend:
+    """Accept a ``StorageBackend`` directly, or wrap a ``Path`` as a filesystem one."""
+    if isinstance(backend, Path):
+        return FilesystemBackend(backend)
+    return backend
 
 
 def _leaf_view(node: Node) -> dict[str, Any]:
@@ -110,13 +95,19 @@ def _safe_reduce(
         }
 
 
-def compute_view(node: Node, root: Path, *, node_path: str = "/") -> dict[str, Any]:
-    """Compute the rolled-up view for ``node``. Persists per-node cache under ``root``.
+def compute_view(
+    node: Node, backend: StorageBackend | Path, *, node_path: str = "/"
+) -> dict[str, Any]:
+    """Compute the rolled-up view for ``node``. Persists per-node cache via ``backend``.
+
+    ``backend`` is a :class:`StorageBackend`; a bare :class:`~pathlib.Path` is accepted
+    for back-compat and wrapped in a :class:`FilesystemBackend`.
 
     Leaves delegate to their state (or to the node's view applied to that state).
     Internal nodes recurse over children, key the result by child name, then pass
     through ``node.reducer`` if set, otherwise return the children dict directly.
     """
+    backend = _coerce_backend(backend)
     if not node.children:
         return _leaf_view(node)
 
@@ -124,7 +115,7 @@ def compute_view(node: Node, root: Path, *, node_path: str = "/") -> dict[str, A
     children_hashes: list[str] = []
     for child in node.children:
         sub_path = f"{node_path.rstrip('/')}/{child.name}"
-        view = compute_view(child, root, node_path=sub_path)
+        view = compute_view(child, backend, node_path=sub_path)
         children_views[child.name] = view
         children_hashes.append(_content_hash(view))
 
@@ -135,8 +126,7 @@ def compute_view(node: Node, root: Path, *, node_path: str = "/") -> dict[str, A
         tuple(children_hashes),
     )
 
-    cache_path = _on_disk_path(root, node_path) / _CACHE_DIR_NAME / _CACHE_FILE_NAME
-    cached = _load_cache(cache_path)
+    cached = backend.read_cache(node_path)
     if cached is not None and cached[0] == key:
         return cached[1]
 
@@ -145,11 +135,11 @@ def compute_view(node: Node, root: Path, *, node_path: str = "/") -> dict[str, A
     else:
         result = children_views
 
-    _store_cache(cache_path, key, result)
+    backend.write_cache(node_path, key, result)
     return result
 
 
 def compute_view_at(tree: Tree, path: str, root_dir: Path) -> dict[str, Any]:
     """Compute the rolled-up view for the node at ``path`` inside ``tree``."""
     node = tree.get(path)
-    return compute_view(node, root_dir, node_path=path or "/")
+    return compute_view(node, FilesystemBackend(root_dir), node_path=path or "/")
