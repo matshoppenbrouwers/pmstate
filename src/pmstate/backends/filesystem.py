@@ -8,7 +8,16 @@ from pathlib import Path
 from typing import Any
 
 from pmstate.backends.base import Cursor
-from pmstate.reader import ReaderError
+
+
+class ReaderError(ValueError):
+    """Raised when a JSONL line cannot be decoded."""
+
+    def __init__(self, path: Path, line_number: int, raw_line: str) -> None:
+        super().__init__(f"failed to decode {path} line {line_number}: {raw_line!r}")
+        self.path = path
+        self.line_number = line_number
+        self.raw_line = raw_line
 
 
 class FilesystemBackend:

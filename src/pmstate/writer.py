@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 
+from pmstate.backends.filesystem import FilesystemBackend
 from pmstate.envelope import Event
 
 _EVENT_BYTE_CEILING = 4000
@@ -21,12 +22,12 @@ class EventTooLargeError(ValueError):
 
 def append_event(log_path: Path, event: Event, *, fsync: bool = False) -> None:
     """Atomically append one event to ``log_path`` as a single JSONL line."""
-    payload = json.dumps(event.to_dict(), separators=(",", ":"), ensure_ascii=False) + "\n"
-    encoded = payload.encode("utf-8")
-    if len(encoded) > _EVENT_BYTE_CEILING:
-        raise EventTooLargeError(len(encoded))
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    with log_path.open("ab") as f:
-        f.write(encoded)
-        if fsync:
+    data = event.to_dict()
+    payload = json.dumps(data, separators=(",", ":"), ensure_ascii=False) + "\n"
+    size = len(payload.encode("utf-8"))
+    if size > _EVENT_BYTE_CEILING:
+        raise EventTooLargeError(size)
+    FilesystemBackend(log_path.parent).append(log_path.name, data)
+    if fsync:
+        with log_path.open("rb") as f:
             os.fsync(f.fileno())

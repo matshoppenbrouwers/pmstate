@@ -9,6 +9,8 @@ from typing import Any
 
 import attrs
 
+from pmstate.backends.filesystem import FilesystemBackend
+
 LogView = Callable[[Iterable[dict[str, Any]]], dict[str, Any]]
 TableView = Callable[[Any], dict[str, Any]]
 
@@ -43,17 +45,6 @@ def _default_table_view(doc: Any) -> dict[str, Any]:
     return doc
 
 
-def _read_jsonl(path: Path) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    with path.open("r", encoding="utf-8") as f:
-        for raw in f:
-            line = raw.strip()
-            if not line:
-                continue
-            rows.append(json.loads(line))
-    return rows
-
-
 @attrs.define(frozen=True, slots=True)
 class Log:
     """Append-only JSONL event log. ``read()`` returns the view dict; errors surface as data."""
@@ -64,7 +55,10 @@ class Log:
     def read(self) -> dict[str, Any]:
         """Return the view applied to all events. Reads the entire file (cost: O(file size))."""
         try:
-            events = _read_jsonl(self.path)
+            if not self.path.exists():
+                raise FileNotFoundError(str(self.path))
+            backend = FilesystemBackend(self.path.parent)
+            events = list(backend.read(self.path.name))
             view = self.view or _default_log_view
             return view(events)
         except Exception as exc:

@@ -2,22 +2,14 @@
 
 from __future__ import annotations
 
-import json
 from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
+from pmstate.backends.filesystem import FilesystemBackend, ReaderError
 from pmstate.upcasters import UpcasterRegistry, default_registry
 
-
-class ReaderError(ValueError):
-    """Raised when a JSONL line cannot be decoded."""
-
-    def __init__(self, path: Path, line_number: int, raw_line: str) -> None:
-        super().__init__(f"failed to decode {path} line {line_number}: {raw_line!r}")
-        self.path = path
-        self.line_number = line_number
-        self.raw_line = raw_line
+__all__ = ["ReaderError", "read_events"]
 
 
 def read_events(
@@ -37,32 +29,15 @@ def read_events(
     ``registry`` is ``None``, the module-level ``default_registry`` is used.
     """
     active_registry = registry if registry is not None else default_registry
+    after = str(start) if start is not None else None
+    until = str(end) if end is not None else None
+    backend = FilesystemBackend(log_path.parent)
     yielded = 0
-    line_number = 0
-    if not log_path.exists():
-        return
-    with log_path.open("rb") as f:
-        if start is not None:
-            f.seek(start)
-        while True:
-            if limit is not None and yielded >= limit:
-                return
-            if end is not None and f.tell() >= end:
-                return
-            raw = f.readline()
-            if not raw:
-                return
-            line_number += 1
-            stripped = raw.strip()
-            if not stripped:
-                continue
-            try:
-                decoded: dict[str, Any] = json.loads(stripped)
-            except json.JSONDecodeError as exc:
-                text = stripped.decode("utf-8", "replace")
-                raise ReaderError(log_path, line_number, text) from exc
-            decoded = active_registry.upcast(decoded)
-            if filter is not None and not filter(decoded):
-                continue
-            yield decoded
-            yielded += 1
+    for raw_event in backend.read(log_path.name, after=after, until=until):
+        decoded = active_registry.upcast(raw_event)
+        if filter is not None and not filter(decoded):
+            continue
+        if limit is not None and yielded >= limit:
+            return
+        yield decoded
+        yielded += 1
